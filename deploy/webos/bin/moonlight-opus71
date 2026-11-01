@@ -1,0 +1,8 @@
+#!/bin/sh
+# Separate test application only. Never alter a system library or plugin.
+APP_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+if command -v python3 >/dev/null 2>&1; then
+    exec python3 -B "$APP_ROOT/libexec/opus71_session.py" "$APP_ROOT"
+fi
+echo 'Moonlight Opus71: Python unavailable; using original audio capabilities.' >&2
+exec "$APP_ROOT/bin/moonlight" "$@"

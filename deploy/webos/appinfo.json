@@ -3,14 +3,14 @@
     "version": "@PROJECT_VERSION@",
     "vendor": "Mariotaku Lee",
     "type": "native",
-    "main": "bin/moonlight",
-    "title": "Moonlight",
+    "main": "bin/moonlight-opus71",
+    "title": "Moonlight Opus 7.1 Test",
     "icon": "icon.png",
     "iconColor": "#ffffff",
     "largeIcon": "icon_large.png",
     "splashBackground": "splash.png",
-    "dialAppName": "Moonlight",
-    "appDescription": "Open Source NVIDIA GameStream Client",
+    "dialAppName": "Moonlight Opus71 Test",
+    "appDescription": "Experimental C5 Opus 7.1 to eARC LPCM7.1; separate application",
     "supportTouchMode": "full",
     "useAllMouseButtons": true
 }

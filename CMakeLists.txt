@@ -17,6 +17,8 @@ else ()
     endif ()
 endif ()
 
+# Separate experimental application; never a stable Moonlight release.
+set(MOONLIGHT_VERSION "1.6.90")
 project(moonlight VERSION ${MOONLIGHT_VERSION} LANGUAGES C)
 
 # To suppress warnings for MbedTLS
@@ -100,7 +102,8 @@ if (TARGET_WEBOS)
     set(THREADS_PTHREAD_ARG "2" CACHE STRING "Result from TRY_RUN" FORCE)
     set(OS_LINUX TRUE)
 
-    set(WEBOS_APPINFO_ID "com.limelight.webos")
+    set(WEBOS_APPINFO_ID "com.ssz990220.moonlight.opus71")
+    set(SS4S_WEBOS_OPUS71_EXPERIMENTAL ON CACHE BOOL "App-private PCM7.1 test" FORCE)
     set(CMAKE_INSTALL_RPATH "$ORIGIN/lib/backports:$ORIGIN/../lib/backports:$ORIGIN")
 elseif (TARGET_STEAMLINK)
     set(OS_LINUX TRUE)

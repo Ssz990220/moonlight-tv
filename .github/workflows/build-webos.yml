@@ -1,4 +1,4 @@
-name: Build (webOS)
+name: Build Opus 7.1 Test (webOS)
 
 on:
   push:
@@ -6,10 +6,8 @@ on:
     tags-ignore:
       - 'v*.*.*'
     branches:
-      - '**'
-  pull_request:
-    branches:
-      - '**'
+      - 'codex/opus71-c5-test'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -18,6 +16,9 @@ concurrency:
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Debug
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -62,10 +63,22 @@ jobs:
       - name: Install Tools
         run: sudo apt-get install ./temp/*.deb
 
+      - name: Install contract test dependencies
+        run: sudo apt-get install -y libgstreamer1.0-dev libopus-dev
+
+      - name: Test Opus channels and routing ownership
+        run: |
+          third_party/ss4s/tests/run-opus71-tests.sh /tmp/ss4s-opus71-tests
+          python3 -B tests/test_opus71_policy.py
+
       - name: webOS Build
         uses: ./.github/actions/build-webos
         with:
           build-type: ${{ env.BUILD_TYPE }}
+
+      - name: Record source and binary identities
+        run: |
+          python3 scripts/webos/opus71_provenance.py
 
       - name: Add Commit Hash Suffix
         shell: bash
@@ -75,7 +88,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: webos-snapshot-${{ env.SHORT_SHA }}
-          path: dist/*.ipk
+          path: |
+            dist/*.ipk
+            dist/opus71-build-provenance.json
 
       - name: Compatibility Check
         run: webosbrew-ipk-verify -f markdown -d -o $GITHUB_STEP_SUMMARY dist/*.ipk
