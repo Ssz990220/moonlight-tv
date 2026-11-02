@@ -1,7 +1,7 @@
 # LG C5 Opus 7.1 test build
 
 This is an unvalidated, separate application (`com.ssz990220.moonlight.opus71`,
-version 1.6.95). It does not replace `com.limelight.webos`, DTS Enabler, any system
+version 1.6.96). It does not replace `com.limelight.webos`, DTS Enabler, any system
 library, or a GStreamer plugin. No installer, boot service, root escalation,
 firmware change, or automatic television connection is included.
 
@@ -28,6 +28,12 @@ retains its maximum frame rate. The C5's read-only HEVC result is 4096x2304 at
 SS4S's 7.1 experiment is compiled off by default. The app-local bootstrap enables
 it only in its own child process and preloads an app-local library. That shim
 preserves the negotiated full OpusHead before LG's native decoder consumes it.
+The C5 NDL API rejects `OPUS 8ch` in AudioDataSetting before constructing its
+decoder. Version 1.6.96 uses its accepted six-channel creation descriptor, then
+replaces the compressed-input CAPS with the real eight-channel full OpusHead
+at the app-owned decoder's sink pad. It removes the obsolete six-channel mask.
+This is a new experimental adapter, not yet proof that LG's decoder accepts it.
+The decoded-output guard below is unchanged and never relabels PCM6 as PCM8.
 On that process's LG audio sink it requires actual native eight-channel,
 48 kHz Opus output with `acmod=(uint)21`; it does not relabel padded 5.1
 (`acmod=7`) as 7.1. Eligible caps retain codec17 and gain `out-channels=(int)8`

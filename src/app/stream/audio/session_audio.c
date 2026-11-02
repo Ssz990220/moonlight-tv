@@ -30,6 +30,9 @@ static int aud_init(int audioConfiguration, const POPUS_MULTISTREAM_CONFIGURATIO
     memset(&audio_stream_info, 0, sizeof(audio_stream_info));
     session = context;
     player = session->player;
+    commons_log_info("Session", "Opus configuration: %d channels, %d streams, %d coupled, %d hz",
+                     opusConfig->channelCount, opusConfig->streams, opusConfig->coupledStreams,
+                     opusConfig->sampleRate);
     SS4S_AudioCodec codec = SS4S_AUDIO_PCM_S16LE;
     size_t codecDataLen = 0;
     SS4S_AudioInfo info = {

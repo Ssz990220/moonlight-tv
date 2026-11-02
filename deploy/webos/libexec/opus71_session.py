@@ -26,7 +26,10 @@ def capture_startup(stream, root):
     rows = []
     pattern = re.compile(r'(?:Module `[^`]+` (?:can.t be loaded|check result):.*|'
                          r'(?:Video|Audio) module:.*|Video capability: [0-9 x,FPSp]+|'
-                         r'Panel native resolution: [0-9 x,:a-z]+|System:.*|Root route bridge:.*)')
+                         r'Panel native resolution: [0-9 x,:a-z]+|'
+                         r'Opus71 decoder input: full eight-channel OpusHead applied|'
+                         r'Opus configuration: [0-9 a-z,]+|'
+                         r'System:.*|Root route bridge:.*)')
     def lines():
         while True:
             try:
@@ -180,7 +183,7 @@ def worker(root, parent_pid, read_fd, ready_fd, log_fd):
     for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(sig, stop)
     pending = b''
-    journal = {'pid': parent_pid, 'active': False, 'caps': False, 'seq': 0, 'since': 0}
+    journal = {'pid': parent_pid, 'active': False, 'caps': False, 'inputCaps': False, 'seq': 0, 'since': 0}
     def publish():
         try:
             folder = root / 'cache'
@@ -207,15 +210,17 @@ def worker(root, parent_pid, read_fd, ready_fd, log_fd):
                 pending += data
                 while b'\n' in pending:
                     row, pending = pending.split(b'\n', 1)
-                    match = re.fullmatch(rb'([BEFR]) (\d+) (\d+)', row)
+                    match = re.fullmatch(rb'([BEFRI]) (\d+) (\d+)', row)
                     if not match:
                         continue
                     kind, seq, stamp = match[1], int(match[2]), int(match[3]) / 1000.0
                     if kind == b'B':
-                        journal.update(active=True, caps=False, seq=seq, since=stamp)
+                        journal.update(active=True, caps=False, inputCaps=False, seq=seq, since=stamp)
                         publish()
                     elif seq == journal['seq']:
-                        if kind == b'F':
+                        if kind == b'I':
+                            journal['inputCaps'] = True
+                        elif kind == b'F':
                             journal['caps'] = True
                         else:
                             journal.update(active=False, caps=False)
