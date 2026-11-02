@@ -1,7 +1,7 @@
 # LG C5 Opus 7.1 test build
 
 This is an unvalidated, separate application (`com.ssz990220.moonlight.opus71`,
-version 1.6.91). It does not replace `com.limelight.webos`, DTS Enabler, any system
+version 1.6.92). It does not replace `com.limelight.webos`, DTS Enabler, any system
 library, or a GStreamer plugin. No installer, boot service, root escalation,
 firmware change, or automatic television connection is included.
 

@@ -27,6 +27,7 @@
 #include "stream/embed_wrapper.h"
 #ifdef TARGET_WEBOS
 #include "platform/webos/opus71_sdk.h"
+extern void opus71_root_bridge_start(void);
 #endif
 
 PCONFIGURATION app_configuration = NULL;
@@ -106,6 +107,9 @@ int app_init(app_t *app, app_settings_loader *settings_loader, int argc, char *a
     global = app;
 
     SS4S_PostInit(argc, argv);
+#ifdef TARGET_WEBOS
+    opus71_root_bridge_start();
+#endif
     return 0;
 }
 

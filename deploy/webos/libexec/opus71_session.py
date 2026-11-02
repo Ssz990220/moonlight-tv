@@ -25,7 +25,7 @@ def capture_startup(stream, root):
     """Retain backend initialization messages only, never connection/media logs."""
     rows = []
     pattern = re.compile(r'(?:Module `[^`]+` (?:can.t be loaded|check result):.*|'
-                         r'(?:Video|Audio) module:.*|System:.*)')
+                         r'(?:Video|Audio) module:.*|System:.*|Root route bridge:.*)')
     def lines():
         while True:
             try:
@@ -178,10 +178,18 @@ def worker(root, parent_pid, read_fd, ready_fd, log_fd):
         stopping[0] = True
     for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(sig, stop)
-    policy = Policy()
-    session = None
     pending = b''
-    last_check = 0
+    journal = {'pid': parent_pid, 'active': False, 'caps': False, 'seq': 0, 'since': 0}
+    def publish():
+        try:
+            folder = root / 'cache'
+            folder.mkdir(exist_ok=True)
+            temp = folder / 'opus71-session.tmp'
+            temp.write_text(json.dumps(journal))
+            temp.replace(folder / 'opus71-session.json')
+        except OSError:
+            pass
+    publish()
     os.write(ready_fd, b'1')
     os.close(ready_fd)
     try:
@@ -203,37 +211,18 @@ def worker(root, parent_pid, read_fd, ready_fd, log_fd):
                         continue
                     kind, seq, stamp = match[1], int(match[2]), int(match[3]) / 1000.0
                     if kind == b'B':
-                        policy.restore()
-                        session = {'seq': seq, 'since': stamp, 'caps': False, 'applied': False,
-                                   'deadline': time.monotonic() + 20}
-                    elif session and seq == session['seq']:
+                        journal.update(active=True, caps=False, seq=seq, since=stamp)
+                        publish()
+                    elif seq == journal['seq']:
                         if kind == b'F':
-                            session['caps'] = True
-                        elif kind in (b'E', b'R'):
-                            policy.restore()
-                            session = None
-            now = time.monotonic()
-            if now - last_check < 1:
-                continue
-            last_check = now
-            try:
-                if policy.owned and not policy.still_owned():
-                    policy.owned = False
-                    session = None
-                if session and session['caps'] and not session['applied'] and now < session['deadline']:
-                    log = subprocess.check_output(['dmesg'], stderr=subprocess.DEVNULL,
-                                                  universal_newlines=True, timeout=3)
-                    if kernel_proven(log, parent_pid, session['since']):
-                        session['applied'] = policy.apply()
-            except Exception as error:
-                print('Moonlight Opus71: route unavailable (' + type(error).__name__ + ').', file=sys.stderr)
-                policy.restore()
-                session = None
+                            journal['caps'] = True
+                        else:
+                            journal.update(active=False, caps=False)
+                        publish()
     finally:
-        try:
-            policy.restore()
-        finally:
-            os.close(read_fd)
+        journal.update(active=False, caps=False)
+        publish()
+        os.close(read_fd)
     return 0
 
 

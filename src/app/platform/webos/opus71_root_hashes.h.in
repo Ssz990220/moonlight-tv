@@ -1,0 +1,3 @@
+#pragma once
+#define OPUS71_ROOT_SHA "@OPUS71_ROOT_SHA@"
+#define OPUS71_POLICY_SHA "@OPUS71_POLICY_SHA@"
