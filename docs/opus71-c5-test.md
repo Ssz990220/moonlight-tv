@@ -1,7 +1,7 @@
 # LG C5 Opus 7.1 test build
 
 This is an unvalidated, separate application (`com.ssz990220.moonlight.opus71`,
-version 1.6.90). It does not replace `com.limelight.webos`, DTS Enabler, any system
+version 1.6.91). It does not replace `com.limelight.webos`, DTS Enabler, any system
 library, or a GStreamer plugin. No installer, boot service, root escalation,
 firmware change, or automatic television connection is included.
 
@@ -15,6 +15,9 @@ to the Vorbis-order table required by OpusHead family 1. Encoded packets are not
 the new eight-channel path. This is not TrueHD/DTS/Atmos passthrough or a lossless
 network audio mode.
 
+The native launcher keeps the original webOS application PID when it execs Moonlight.
+An optional Python child handles policy and filtered startup diagnostics; no PTY is needed.
+
 SS4S's 7.1 experiment is compiled off by default. The separate launcher enables
 it only in its own child process and preloads an app-local library. That shim
 preserves the negotiated full OpusHead before LG's native decoder consumes it.
@@ -25,7 +28,7 @@ and LFE enabled. The app-owned sink's PCM bypass/multichannel switches are false
 matching the previously observed native LPCM7.1 route. Original property values
 are saved and restored if still owned.
 
-The Python supervisor waits for a current-session CAPS notification and fresh
+The Python child worker waits for a current-session CAPS notification and fresh
 kernel native first-format/converter evidence. Only with this app foreground,
 Digital Sound Output=Auto, eARC On, an active eARC link and advertised eight-channel
 PCM receiver support may it request `Sndout EARC Outputtype=[2,1,8,0,1]`. It does
@@ -33,10 +36,15 @@ not enable OTT/MAT. It snapshots the old value and restores it at session end
 only if the app, output settings and current control value still match its lease.
 A user/app/output change relinquishes the lease instead of being overwritten.
 
-The supervisor requires existing `python3`, `luna-send`, `dmesg` and `amixer`
+The child worker requires existing `python3`, `luna-send`, `dmesg` and `amixer`
 access. It does not grant itself extra permissions. Permission or proof failures
 leave the route unmodified. If Python is absent, the launcher uses original
 six-channel capabilities. A missing shim also leaves SS4S capped at six channels.
+
+If the platform SDK query fails, the client can read `conf/device-sdk-version`.
+The installer obtains this public version from the actual TV and writes it only
+inside the separate app; no version is guessed, bundled, or used to override a
+successful system query. Missing/invalid metadata leaves version detection failed.
 
 ## Validation before installation
 

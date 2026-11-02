@@ -25,6 +25,9 @@
 #include "app_error.h"
 #include "app_session.h"
 #include "stream/embed_wrapper.h"
+#ifdef TARGET_WEBOS
+#include "platform/webos/opus71_sdk.h"
+#endif
 
 PCONFIGURATION app_configuration = NULL;
 
@@ -51,7 +54,14 @@ int app_init(app_t *app, app_settings_loader *settings_loader, int argc, char *a
     app->embed_version.major = -1;
 #endif
     app_configuration = &app->settings;
-    if (os_info_get(&app->os_info) == 0) {
+    int os_status = os_info_get(&app->os_info);
+#ifdef TARGET_WEBOS
+    if (os_status != 0 || app->os_info.version.major <= 0) {
+        os_status = opus71_sdk_fallback(&app->os_info);
+        if (os_status == 0) commons_log_info("APP", "Using app-owned SDK metadata after system query failed");
+    }
+#endif
+    if (os_status == 0) {
         char *info_str = os_info_str(&app->os_info);
         commons_log_info("APP", "System: %s", info_str);
         free(info_str);

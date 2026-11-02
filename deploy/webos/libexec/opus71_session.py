@@ -14,26 +14,51 @@ import select
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 APP = 'com.ssz990220.moonlight.opus71'
 TARGET = [2, 1, 8, 0, 1]
 
 
+def capture_startup(stream, root):
+    """Retain backend initialization messages only, never connection/media logs."""
+    rows = []
+    pattern = re.compile(r'(?:Module `[^`]+` (?:can.t be loaded|check result):.*|'
+                         r'(?:Video|Audio) module:.*|System:.*)')
+    def lines():
+        while True:
+            try:
+                line = stream.readline()
+            except OSError:  # A PTY returns EIO after its child closes.
+                return
+            if not line:
+                return
+            yield line
+    for line in lines():
+        match = pattern.search(line)
+        if not match or len(rows) >= 24:
+            continue
+        message = re.sub(r'https?://\S+', '[URL]', match[0])
+        message = re.sub(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', '[IP]', message)
+        rows.append(message[:1000])
+        try:
+            folder = root / 'cache'
+            folder.mkdir(exist_ok=True)
+            (folder / 'opus71-startup.json').write_text(json.dumps({'backendInitialization': rows}, indent=2))
+        except OSError:
+            pass
+
+
 def luna(uri, payload):
-    master, slave = os.openpty()
-    try:
-        result = subprocess.run(['luna-send', '-n', '1', '-w', '1500', '-f', uri,
-                                 json.dumps(payload)], stdin=slave, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, universal_newlines=True,
-                                timeout=3, check=True)
-        value = json.loads(result.stdout)
-        if isinstance(value, dict) and value.get('returnValue') is False:
-            raise RuntimeError('request rejected')
-        return value
-    finally:
-        os.close(slave)
-        os.close(master)
+    result = subprocess.run(['luna-send', '-n', '1', '-w', '1500', '-f', uri,
+                             json.dumps(payload)], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, universal_newlines=True,
+                            timeout=3, check=True)
+    value = json.loads(result.stdout)
+    if isinstance(value, dict) and value.get('returnValue') is False:
+        raise RuntimeError('request rejected')
+    return value
 
 
 def foreground():
@@ -135,33 +160,42 @@ class Policy:
             self.owned = False
 
 
-def main(root):
+def worker(root, parent_pid, read_fd, ready_fd, log_fd):
     root = Path(root).resolve()
-    read_fd, write_fd = os.pipe()
-    os.set_blocking(write_fd, False)
-    env = dict(os.environ, APPID=APP, SS4S_WEBOS_OPUS71='1',
-               SS4S_OPUS71_NOTIFY_FD=str(write_fd))
-    # Preload only this child's app-local library. Do not inherit another preload.
-    env['LD_PRELOAD'] = str(root / 'lib/libss4s-opus71-route.so')
-    child = subprocess.Popen([str(root / 'bin/moonlight')] + sys.argv[2:],
-                             env=env, pass_fds=(write_fd,))
-    os.close(write_fd)
+    # Drop inherited LS2 / application-launch handles. Keep only owned pipes.
+    keep = {read_fd, ready_fd, log_fd}
+    for entry in Path('/proc/self/fd').iterdir():
+        fd = int(entry.name)
+        if fd > 2 and fd not in keep:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+    output = os.fdopen(log_fd, 'r', errors='replace')
+    threading.Thread(target=capture_startup, args=(output, root), daemon=True).start()
     stopping = [False]
-    def stop(signum, _frame):
+    def stop(_signum, _frame):
         stopping[0] = True
-        if child.poll() is None:
-            child.send_signal(signum)
     for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(sig, stop)
     policy = Policy()
     session = None
     pending = b''
     last_check = 0
+    os.write(ready_fd, b'1')
+    os.close(ready_fd)
     try:
-        while child.poll() is None and not stopping[0]:
+        while not stopping[0]:
+            try:
+                os.kill(parent_pid, 0)
+            except ProcessLookupError:
+                break
             ready, _, _ = select.select([read_fd], [], [], .25)
             if ready:
-                pending += os.read(read_fd, 4096)
+                data = os.read(read_fd, 4096)
+                if not data:
+                    break
+                pending += data
                 while b'\n' in pending:
                     row, pending = pending.split(b'\n', 1)
                     match = re.fullmatch(rb'([BEFR]) (\d+) (\d+)', row)
@@ -184,33 +218,26 @@ def main(root):
             last_check = now
             try:
                 if policy.owned and not policy.still_owned():
-                    # An app/output/user transition ends our lease. Do not fight it.
                     policy.owned = False
                     session = None
                 if session and session['caps'] and not session['applied'] and now < session['deadline']:
                     log = subprocess.check_output(['dmesg'], stderr=subprocess.DEVNULL,
                                                   universal_newlines=True, timeout=3)
-                    if kernel_proven(log, child.pid, session['since']):
+                    if kernel_proven(log, parent_pid, session['since']):
                         session['applied'] = policy.apply()
             except Exception as error:
-                # Service responses and exception text may contain private data.
                 print('Moonlight Opus71: route unavailable (' + type(error).__name__ + ').', file=sys.stderr)
                 policy.restore()
                 session = None
     finally:
-        if child.poll() is None:
-            child.terminate()
-            try:
-                child.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                child.kill()
-                child.wait()
         try:
             policy.restore()
         finally:
             os.close(read_fd)
-    return child.returncode
+    return 0
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv[1]))
+    if len(sys.argv) != 7 or sys.argv[1] != '--worker':
+        raise SystemExit('Launch through the native application entry point')
+    sys.exit(worker(sys.argv[2], *map(int, sys.argv[3:])))
