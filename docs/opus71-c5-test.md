@@ -1,7 +1,7 @@
 # LG C5 Opus 7.1 test build
 
 This is an unvalidated, separate application (`com.ssz990220.moonlight.opus71`,
-version 1.6.94). It does not replace `com.limelight.webos`, DTS Enabler, any system
+version 1.6.95). It does not replace `com.limelight.webos`, DTS Enabler, any system
 library, or a GStreamer plugin. No installer, boot service, root escalation,
 firmware change, or automatic television connection is included.
 
@@ -15,10 +15,17 @@ to the Vorbis-order table required by OpusHead family 1. Encoded packets are not
 the new eight-channel path. This is not TrueHD/DTS/Atmos passthrough or a lossless
 network audio mode.
 
-The native launcher keeps the original webOS application PID when it execs Moonlight.
+The bootstrap is linked into `bin/moonlight` and re-execs that same registered
+executable, preserving both the original PID and the LS2 executable identity.
+The older separate launcher caused `LSHUB_NO_ROLE_FILE` when NDL created its
+resource manager and aborted on the first streaming attempt. Version 1.6.95
+corrects this packaging error without adding or editing any LS2 role files.
 An optional Python child handles policy and filtered startup diagnostics; no PTY is needed.
+Video capability probing now treats the MRC API's boolean `true` as success and
+retains its maximum frame rate. The C5's read-only HEVC result is 4096x2304 at
+120 FPS; this restores preset eligibility, not proof of a successful 4K120 stream.
 
-SS4S's 7.1 experiment is compiled off by default. The separate launcher enables
+SS4S's 7.1 experiment is compiled off by default. The app-local bootstrap enables
 it only in its own child process and preloads an app-local library. That shim
 preserves the negotiated full OpusHead before LG's native decoder consumes it.
 On that process's LG audio sink it requires actual native eight-channel,

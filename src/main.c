@@ -13,6 +13,8 @@ static int settings_load(app_settings_t *settings);
 
 int main(int argc, char *argv[]) {
 #ifdef TARGET_WEBOS
+    int opus71_launcher_start(char **argv);
+    if (opus71_launcher_start(argv) != 0) return 1;
     if (getenv("EGL_PLATFORM") == NULL) {
         setenv("EGL_PLATFORM", "wayland", 0);
     }

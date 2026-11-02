@@ -18,7 +18,7 @@ else ()
 endif ()
 
 # Separate experimental application; never a stable Moonlight release.
-set(MOONLIGHT_VERSION "1.6.94")
+set(MOONLIGHT_VERSION "1.6.95")
 project(moonlight VERSION ${MOONLIGHT_VERSION} LANGUAGES C)
 
 # To suppress warnings for MbedTLS
@@ -378,10 +378,7 @@ endif ()
 
 if (TARGET_WEBOS)
     include(PackageWebOS)
-    add_executable(moonlight-opus71-launcher src/opus71_launcher.c)
-    set_target_properties(moonlight-opus71-launcher PROPERTIES OUTPUT_NAME moonlight-opus71)
-    target_compile_options(moonlight-opus71-launcher PRIVATE -Wall -Wextra -Werror)
-    install(TARGETS moonlight-opus71-launcher RUNTIME DESTINATION bin)
+    target_sources(moonlight PRIVATE src/opus71_launcher.c)
 elseif (TARGET_STEAMLINK)
     include(PackageSteamLink)
 elseif (OS_LINUX)

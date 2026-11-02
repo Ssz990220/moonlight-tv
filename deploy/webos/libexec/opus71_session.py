@@ -25,7 +25,8 @@ def capture_startup(stream, root):
     """Retain backend initialization messages only, never connection/media logs."""
     rows = []
     pattern = re.compile(r'(?:Module `[^`]+` (?:can.t be loaded|check result):.*|'
-                         r'(?:Video|Audio) module:.*|System:.*|Root route bridge:.*)')
+                         r'(?:Video|Audio) module:.*|Video capability: [0-9 x,FPSp]+|'
+                         r'Panel native resolution: [0-9 x,:a-z]+|System:.*|Root route bridge:.*)')
     def lines():
         while True:
             try:

@@ -3,7 +3,7 @@
     "version": "@PROJECT_VERSION@",
     "vendor": "Mariotaku Lee",
     "type": "native",
-    "main": "bin/moonlight-opus71",
+    "main": "bin/moonlight",
     "title": "Moonlight Opus 7.1 Test",
     "icon": "icon.png",
     "iconColor": "#ffffff",

@@ -10,9 +10,17 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-/* Keep webOS's application PID as native Moonlight; policy is only a child. */
-int main(int argc, char **argv) {
-    (void)argc;
+/* Re-exec the SAME registered executable to preload the shim. LS2 checks the
+ * actual executable path as well as the PID; a separate launcher loses its
+ * generated native-app role when it execs bin/moonlight. */
+int opus71_launcher_start(char **argv) {
+    char own_pid[24];
+    snprintf(own_pid, sizeof(own_pid), "%ld", (long)getpid());
+    const char *bootstrapped = getenv("SS4S_OPUS71_BOOTSTRAP_PID");
+    if (bootstrapped && strcmp(bootstrapped, own_pid) == 0) {
+        unsetenv("SS4S_OPUS71_BOOTSTRAP_PID");
+        return 0;
+    }
     char root[PATH_MAX], script[PATH_MAX], binary[PATH_MAX], shim[PATH_MAX];
     ssize_t size = readlink("/proc/self/exe", root, sizeof(root) - 1);
     if (size <= 0 || size >= (ssize_t)sizeof(root) - 1) return 1;
@@ -63,6 +71,7 @@ int main(int argc, char **argv) {
     }
     close(log[1]);
     setenv("APPID", "com.ssz990220.moonlight.opus71", 1);
+    setenv("SS4S_OPUS71_BOOTSTRAP_PID", own_pid, 1);
     argv[0] = binary;
     execv(binary, argv);
     return 1;
