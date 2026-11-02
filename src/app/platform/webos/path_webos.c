@@ -12,7 +12,7 @@ char *path_pref(bool *persistent) {
     char *confdir = path_join(basedir, "conf");
     if (path_dir_ensure(confdir) == -1) {
         free(confdir);
-        confdir = strdup("/tmp/moonlight-tv/conf");
+        confdir = strdup("/tmp/moonlight-opus71/conf");
         path_dir_ensure(confdir);
         *persistent = false;
     } else {
@@ -26,7 +26,7 @@ char *path_cache() {
     char *cachedir = path_join(basedir, "cache");
     if (path_dir_ensure(cachedir) == -1) {
         free(cachedir);
-        cachedir = strdup("/tmp/moonlight-tv/cache");
+        cachedir = strdup("/tmp/moonlight-opus71/cache");
         path_dir_ensure(cachedir);
     }
     return cachedir;

@@ -70,6 +70,8 @@ jobs:
         run: |
           third_party/ss4s/tests/run-opus71-tests.sh /tmp/ss4s-opus71-tests
           python3 -B tests/test_opus71_policy.py
+          cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -g tests/test_opus71_mapping.c -Isrc/app/stream/audio $(pkg-config --cflags --libs opus) -lm -o /tmp/moonlight-opus71-mapping
+          /tmp/moonlight-opus71-mapping
 
       - name: webOS Build
         uses: ./.github/actions/build-webos

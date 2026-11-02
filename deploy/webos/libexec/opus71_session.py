@@ -164,7 +164,7 @@ def main(root):
                 pending += os.read(read_fd, 4096)
                 while b'\n' in pending:
                     row, pending = pending.split(b'\n', 1)
-                    match = re.fullmatch(rb'([BEF]) (\d+) (\d+)', row)
+                    match = re.fullmatch(rb'([BEFR]) (\d+) (\d+)', row)
                     if not match:
                         continue
                     kind, seq, stamp = match[1], int(match[2]), int(match[3]) / 1000.0
@@ -175,7 +175,7 @@ def main(root):
                     elif session and seq == session['seq']:
                         if kind == b'F':
                             session['caps'] = True
-                        elif kind == b'E':
+                        elif kind in (b'E', b'R'):
                             policy.restore()
                             session = None
             now = time.monotonic()

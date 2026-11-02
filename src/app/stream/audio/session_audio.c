@@ -7,6 +7,7 @@
 #include "stream/connection/session_connection.h"
 #include "stream/session_priv.h"
 #include "logging.h"
+#include "opus71_mapping.h"
 
 #define SAMPLES_PER_FRAME  240
 
@@ -142,7 +143,12 @@ static size_t opus_head_serialize(const OPUS_MULTISTREAM_CONFIGURATION *config, 
     // 8.2. Coupled Stream Count 'M' (8 bits, unsigned):
     *ptr++ = config->coupledStreams;
     // 8.3. Channel Mapping (8*C bits):
-    ptr = memcpy(ptr, config->mapping, config->channelCount) + config->channelCount;
+    if (config->channelCount == 8) {
+        moonlight_opus71_vorbis_mapping(ptr, config->mapping);
+        ptr += 8;
+    } else {
+        ptr = memcpy(ptr, config->mapping, config->channelCount) + config->channelCount;
+    }
     return ptr - data;
 }
 

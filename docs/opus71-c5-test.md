@@ -10,7 +10,8 @@ firmware change, or automatic television connection is included.
 Windows eight-channel audio -> Sunshine Opus multistream -> SS4S NDL -> native
 LG Opus decoder -> native PCM8/acmod21 -> temporary eARC LPCM8 request.
 Standard (5 streams / 3 coupled) and high-quality (8 streams / 0 coupled) 7.1
-configurations are accepted. Encoded packets are not re-encoded or reordered by
+configurations are accepted. Moonlight converts its Windows-order mapping table
+to the Vorbis-order table required by OpusHead family 1. Encoded packets are not re-encoded or reordered by
 the new eight-channel path. This is not TrueHD/DTS/Atmos passthrough or a lossless
 network audio mode.
 
@@ -42,6 +43,8 @@ six-channel capabilities. A missing shim also leaves SS4S capped at six channels
 `third_party/ss4s/tests/run-opus71-tests.sh` tests malformed/truncated headers,
 CAPS preservation and sixteen isolated channel roundtrips through real libopus,
 under AddressSanitizer/UndefinedBehaviorSanitizer, without an audio device.
+`tests/test_opus71_mapping.c` additionally checks all eight Windows-to-Vorbis
+speaker positions through real Opus encoding/decoding in both quality modes.
 `python3 -B tests/test_opus71_policy.py` tests proof/eligibility gates, restoration,
 permission failures and user/app transitions using mocks.
 
