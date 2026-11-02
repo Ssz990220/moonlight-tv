@@ -6,8 +6,20 @@
 #include <string.h>
 #include <unistd.h>
 #include <SDL.h>
-#include "lunasynccall.h"
+#include <luna-service2/lunaservice.h>
 #include "opus71_root_hashes.h"
+
+static bool root_reply(LSHandle *handle, LSMessage *message, void *data) {
+    (void)handle;
+    printf("Root route bridge: %s\n", LSMessageIsHubErrorMessage(message) ? "hub rejected request" : "reply received; status verified separately");
+    g_main_loop_quit(data);
+    return false;
+}
+static gboolean root_timeout(gpointer data) {
+    printf("Root route bridge: request timed out\n");
+    g_main_loop_quit(data);
+    return G_SOURCE_REMOVE;
+}
 
 static void *request_root(void *argument) {
     char *root = argument;
@@ -26,10 +38,29 @@ static void *request_root(void *argument) {
     }
     escaped[out] = 0;
     snprintf(payload, sizeof(payload), "{\"command\":\"%s\"}", escaped);
-    char *reply = NULL;
-    int sent = HLunaServiceCallSync("luna://org.webosbrew.hbchannel.service/exec", payload, true, &reply);
-    printf("Root route bridge: %s\n", sent ? "request delivered; authorization must be checked" : "request unavailable");
-    free(reply);
+    GMainContext *context = g_main_context_new();
+    GMainLoop *loop = g_main_loop_new(context, FALSE);
+    LSHandle *handle = NULL;
+    LSError error;
+    LSErrorInit(&error);
+    LSMessageToken token = 0;
+    if (LSRegisterApplicationService(NULL, "com.ssz990220.moonlight.opus71", &handle, &error) &&
+        LSGmainContextAttach(handle, context, &error) &&
+        LSCallOneReply(handle, "luna://org.webosbrew.hbchannel.service/exec", payload,
+                       root_reply, loop, &token, &error)) {
+        GSource *timeout = g_timeout_source_new(5000);
+        g_source_set_callback(timeout, root_timeout, loop, NULL);
+        g_source_attach(timeout, context);
+        g_main_loop_run(loop);
+        g_source_destroy(timeout);
+        g_source_unref(timeout);
+    } else {
+        printf("Root route bridge: registration or call unavailable (code %d)\n", error.error_code);
+    }
+    if (handle) LSUnregister(handle, &error);
+    LSErrorFree(&error);
+    g_main_loop_unref(loop);
+    g_main_context_unref(context);
     return NULL;
 }
 
