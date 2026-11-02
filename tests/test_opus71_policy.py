@@ -1,6 +1,13 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import json
+import os
+import select
+import subprocess
+import sys
+import tempfile
+import time
 from unittest.mock import patch
 
 path = Path(__file__).resolve().parents[1] / 'deploy/webos/libexec/opus71_session.py'
@@ -19,6 +26,40 @@ def log(pid=123, acmod=21, start=10):
 
 
 class PolicyTest(unittest.TestCase):
+    @unittest.skipUnless(Path('/proc/self/fd').exists(), 'Linux worker FD lifecycle')
+    def test_live_format_can_recover_after_initial_six_channel_caps(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            event_r, event_w = os.pipe()
+            ready_r, ready_w = os.pipe()
+            log_r, log_w = os.pipe()
+            child = subprocess.Popen([sys.executable, '-B', str(path), '--worker',
+                str(root), str(os.getpid()), str(event_r), str(ready_w), str(log_r)],
+                pass_fds=(event_r, ready_w, log_r))
+            for fd in (event_r, ready_w, log_r): os.close(fd)
+            def send(text, expected):
+                os.write(event_w, text.encode())
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    try: value = json.loads((root / 'cache/opus71-session.json').read_text())
+                    except (FileNotFoundError, json.JSONDecodeError): value = {}
+                    if all(value.get(k) == v for k, v in expected.items()): return
+                    time.sleep(.01)
+                self.fail('worker did not publish expected state: ' + str(expected))
+            try:
+                self.assertTrue(select.select([ready_r], [], [], 3)[0])
+                self.assertEqual(os.read(ready_r, 1), b'1')
+                send('B 1 1000\n', dict(active=True, caps=False))
+                send('L 1 1001\nI 1 1002\n', dict(loadConfig=True, inputCaps=True))
+                send('R 1 1003\n', dict(active=True, caps=False))
+                send('F 1 1004\n', dict(active=True, caps=True))
+                send('R 1 1005\n', dict(active=True, caps=False))
+                send('E 1 1006\n', dict(active=False, caps=False))
+            finally:
+                os.close(event_w); os.close(ready_r); os.close(log_w)
+                try: child.wait(timeout=3)
+                except subprocess.TimeoutExpired: child.kill(); child.wait()
+
     def test_eligibility(self):
         self.assertTrue(p.eligible(SOUND, RX))
         for key, value in [('soundOutput', 'tv_speaker'), ('soundOutputDigital', 'passThrough'), ('eArcSupport', 'off')]:

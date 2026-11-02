@@ -64,7 +64,7 @@ jobs:
         run: sudo apt-get install ./temp/*.deb
 
       - name: Install contract test dependencies
-        run: sudo apt-get install -y libgstreamer1.0-dev libopus-dev
+        run: sudo apt-get install -y libgstreamer1.0-dev libopus-dev libjson-c5
 
       - name: Test Opus channels and routing ownership
         run: |

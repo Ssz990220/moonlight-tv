@@ -20,6 +20,7 @@ class LauncherTest(unittest.TestCase):
             flags = subprocess.check_output(['pkg-config', '--cflags', '--libs', 'gstreamer-1.0'], text=True).split()
             backend = ROOT / 'third_party/ss4s/modules/webos/ndl/webos5'
             subprocess.run(['cc', '-std=c11', '-shared', '-fPIC', str(backend / 'opus71_route.c'),
+                            str(backend / 'opus71_load.c'),
                             str(backend / 'opus_config.c'), '-I' + str(backend), *flags, '-lpthread', '-ldl',
                             '-o', str(app / 'lib/libss4s-opus71-route.so')], check=True)
             shutil.copy(ROOT / 'deploy/webos/libexec/opus71_session.py', app / 'libexec')

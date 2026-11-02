@@ -1,7 +1,7 @@
 # LG C5 Opus 7.1 test build
 
 This is an unvalidated, separate application (`com.ssz990220.moonlight.opus71`,
-version 1.6.96). It does not replace `com.limelight.webos`, DTS Enabler, any system
+version 1.6.97). It does not replace `com.limelight.webos`, DTS Enabler, any system
 library, or a GStreamer plugin. No installer, boot service, root escalation,
 firmware change, or automatic television connection is included.
 
@@ -32,7 +32,14 @@ The C5 NDL API rejects `OPUS 8ch` in AudioDataSetting before constructing its
 decoder. Version 1.6.96 uses its accepted six-channel creation descriptor, then
 replaces the compressed-input CAPS with the real eight-channel full OpusHead
 at the app-owned decoder's sink pad. It removes the obsolete six-channel mask.
-This is a new experimental adapter, not yet proof that LG's decoder accepts it.
+On the actual 1.6.96 streaming test the downstream player retained six-channel
+metadata and Sonos reported 5.1 with rear-left/rear-right missing. Version 1.6.97
+also intercepts NDL's existing StarfishMediaAPIs::Load boundary to restore the
+real eight-channel/full-header configuration there, restricted to this app's
+DIRECTMEDIA-ES-PLAYER OPUS load. All other metadata and inactive/ordinary loads
+pass through unchanged. json-c is resolved from the existing runtime library.
+The adapter is tested against a mock ABI-compatible downstream Load function;
+whether the native decoder accepts that configuration still needs a TV test.
 The decoded-output guard below is unchanged and never relabels PCM6 as PCM8.
 On that process's LG audio sink it requires actual native eight-channel,
 48 kHz Opus output with `acmod=(uint)21`; it does not relabel padded 5.1
