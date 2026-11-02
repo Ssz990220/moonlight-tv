@@ -6,11 +6,33 @@
 
 int main(void) {
     const int vorbis_to_wav[8] = {0, 2, 1, 6, 7, 4, 5, 3};
-    for (int high = 0; high < 2; ++high) {
+    const unsigned char affected[8] = {0, 1, 2, 7, 4, 5, 3, 6};
+    unsigned char unchanged[8];
+    assert(!moonlight_opus71_sunshine_mapping(unchanged, affected, 5, 3, true));
+    assert(memcmp(unchanged, affected, 8) == 0);
+    assert(!moonlight_opus71_sunshine_mapping(unchanged, affected, 8, 0, false));
+    for (int mode = 0; mode < 3; ++mode) {
+        int high = mode == 1;
         unsigned char wav_map[8] = {0, 1, 6, 7, 2, 3, 4, 5};
-        if (high) for (int i = 0; i < 8; ++i) wav_map[i] = (unsigned char)i;
+        if (high || mode == 2) for (int i = 0; i < 8; ++i) wav_map[i] = (unsigned char)i;
+        unsigned char callback_map[8];
+        memcpy(callback_map, wav_map, 8);
+        if (mode == 2) {
+            /* Reproduce Sunshine's three-entry rotation and the client's
+             * five-entry GFE correction, rather than assuming the result. */
+            unsigned char advertised[8];
+            memcpy(advertised, wav_map, 8);
+            advertised[3]=wav_map[4]; advertised[4]=wav_map[5]; advertised[5]=wav_map[3];
+            callback_map[3]=advertised[7];
+            memcpy(callback_map+4,advertised+3,4);
+            assert(memcmp(callback_map, affected, 8) == 0);
+        }
+        unsigned char corrected[8];
+        assert(moonlight_opus71_sunshine_mapping(corrected, callback_map,
+                    high ? 8 : 5, high ? 0 : 3, false) == (mode == 2));
+        assert(memcmp(corrected, wav_map, 8) == 0);
         unsigned char vorbis_map[8];
-        moonlight_opus71_vorbis_mapping(vorbis_map, wav_map);
+        moonlight_opus71_vorbis_mapping(vorbis_map, corrected);
         for (int i = 0; i < 8; ++i) assert(vorbis_map[i] == wav_map[vorbis_to_wav[i]]);
         int error;
         OpusMSEncoder *encoder = opus_multistream_encoder_create(48000, 8, high ? 8 : 5, high ? 0 : 3,
@@ -44,6 +66,6 @@ int main(void) {
         opus_multistream_decoder_destroy(decoder);
         opus_multistream_encoder_destroy(encoder);
     }
-    puts("PASS: Windows-to-Vorbis positions for all 8 channels, standard and high-quality Opus");
+    puts("PASS: 24 isolated channel roundtrips; standard, HQ and observed Sunshine SDP rotation");
     return 0;
 }

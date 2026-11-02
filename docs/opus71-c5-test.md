@@ -1,7 +1,7 @@
 # LG C5 Opus 7.1 test build
 
 This is an unvalidated, separate application (`com.ssz990220.moonlight.opus71`,
-version 1.6.97). It does not replace `com.limelight.webos`, DTS Enabler, any system
+version 1.6.98). It does not replace `com.limelight.webos`, DTS Enabler, any system
 library, or a GStreamer plugin. No installer, boot service, root escalation,
 firmware change, or automatic television connection is included.
 
@@ -14,6 +14,24 @@ configurations are accepted. Moonlight converts its Windows-order mapping table
 to the Vorbis-order table required by OpusHead family 1. Encoded packets are not re-encoded or reordered by
 the new eight-channel path. This is not TrueHD/DTS/Atmos passthrough or a lossless
 network audio mode.
+
+For the experimental native eight-channel backend, version 1.6.98 requests
+standard Opus independently of video bitrate. In 1.6.97 the phone confirmed
+7.1 using the 14 Mbps video/standard-Opus comparison; the 95 Mbps/HQ attempt did
+not establish a verified receiver output. This does not yet prove an intrinsic
+HQ decoder limitation. Video bitrate is restored separately to the user's
+original 95 Mbps; resolution and frame rate remain 3840x2160/120.
+
+The observed normal-mode callback map was `0,1,2,7,4,5,3,6`, producing a header
+map `0,2,1,3,6,4,5,7`. Sunshine's `src/rtsp.cpp` rotates only the range ending at
+`audio::MAX_STREAM_CONFIG` (six configurations), whereas moonlight-common-c
+reverses the GFE rotation over eight channels. With Sunshine's identity encoder
+map this exactly predicts SUB->SL, SL->SR and SR->SUB, matching the user's
+report. Only this non-GFE 5-stream/3-coupled signature is corrected to the
+identity Windows map before Windows-to-Vorbis conversion. GFE, custom and HQ
+maps pass through unchanged. Real-libopus tests reproduce both protocol
+rotations and check all eight speaker positions. Physical verification of the
+corrected build is still pending.
 
 The bootstrap is linked into `bin/moonlight` and re-execs that same registered
 executable, preserving both the original PID and the LS2 executable identity.

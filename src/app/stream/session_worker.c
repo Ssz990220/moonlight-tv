@@ -61,9 +61,20 @@ int session_worker(session_t *session) {
     SS4S_PlayerSetViewportSize(session->player, app->ui.width, app->ui.height);
     SS4S_PlayerSetUserdata(session->player, app);
 
+    AUDIO_RENDERER_CALLBACKS audio_callbacks = ss4s_aud_callbacks;
+#if TARGET_WEBOS
+    if (getenv("SS4S_WEBOS_OPUS71") && session->audio_cap.maxChannels >= 8 &&
+        (session->audio_cap.codecs & SS4S_AUDIO_OPUS) &&
+        session->config.stream.audioConfiguration == AUDIO_CONFIGURATION_71_SURROUND) {
+        /* Use the native-compatible 5-stream/3-coupled preset independently
+         * of video bitrate. Do not force HQ's eight independent Opus streams. */
+        audio_callbacks.capabilities |= CAPABILITY_SLOW_OPUS_DECODER;
+        commons_log_info("Session", "Opus71 mode: standard multistream independent of video bitrate");
+    }
+#endif
     int startResult = LiStartConnection(&server->serverInfo, &session->config.stream,
                                         session_connection_callbacks_prepare(session),
-                                        &ss4s_dec_callbacks, &ss4s_aud_callbacks, session, 0, session, 0);
+                                        &ss4s_dec_callbacks, &audio_callbacks, session, 0, session, 0);
     if (startResult != 0) {
         session_set_state(session, STREAMING_ERROR);
         switch (startResult) {

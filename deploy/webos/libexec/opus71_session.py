@@ -29,6 +29,8 @@ def capture_startup(stream, root):
                          r'Panel native resolution: [0-9 x,:a-z]+|'
                          r'Opus71 (?:decoder|player) input: full eight-channel OpusHead applied|'
                          r'Opus configuration: [0-9 a-z,]+|'
+                         r'Opus71 mapping: corrected Sunshine normal-mode surround rotation|'
+                         r'Opus71 mode: standard multistream independent of video bitrate|'
                          r'System:.*|Root route bridge:.*)')
     def lines():
         while True:

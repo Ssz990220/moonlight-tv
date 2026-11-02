@@ -147,7 +147,12 @@ static size_t opus_head_serialize(const OPUS_MULTISTREAM_CONFIGURATION *config, 
     *ptr++ = config->coupledStreams;
     // 8.3. Channel Mapping (8*C bits):
     if (config->channelCount == 8) {
-        moonlight_opus71_vorbis_mapping(ptr, config->mapping);
+        unsigned char wav_map[8];
+        if (moonlight_opus71_sunshine_mapping(wav_map, config->mapping, config->streams,
+                                             config->coupledStreams, session->server->isGfe)) {
+            commons_log_info("Session", "Opus71 mapping: corrected Sunshine normal-mode surround rotation");
+        }
+        moonlight_opus71_vorbis_mapping(ptr, wav_map);
         ptr += 8;
     } else {
         ptr = memcpy(ptr, config->mapping, config->channelCount) + config->channelCount;
