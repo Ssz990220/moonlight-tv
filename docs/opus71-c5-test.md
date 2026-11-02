@@ -28,18 +28,24 @@ and LFE enabled. The app-owned sink's PCM bypass/multichannel switches are false
 matching the previously observed native LPCM7.1 route. Original property values
 are saved and restored if still owned.
 
-The Python child worker waits for a current-session CAPS notification and fresh
-kernel native first-format/converter evidence. Only with this app foreground,
-Digital Sound Output=Auto, eARC On, an active eARC link and advertised eight-channel
-PCM receiver support may it request `Sndout EARC Outputtype=[2,1,8,0,1]`. It does
-not enable OTT/MAT. It snapshots the old value and restores it at session end
-only if the app, output settings and current control value still match its lease.
-A user/app/output change relinquishes the lease instead of being overwritten.
+The ordinary app child publishes only bounded session generations and native
+CAPS proof. The native app requests Homebrew Channel's existing `exec` API to
+start an app-owned root broker, after verifying both Python scripts against
+SHA256 constants compiled into the native client. This does not install a boot
+service, add roles/groups, or change system or existing plugin files.
 
-The child worker requires existing `python3`, `luna-send`, `dmesg` and `amixer`
-access. It does not grant itself extra permissions. Permission or proof failures
-leave the route unmodified. If Python is absent, the launcher uses original
-six-channel capabilities. A missing shim also leaves SS4S capped at six channels.
+The broker is tied to the original native PID and start time, exits with the app
+(or after six hours), and keeps its lock/status only in a root-owned temporary
+directory. It requires the app's active-session journal AND independent kernel
+PCM8/acmod21 converter evidence. Only with this app foreground, Digital Sound
+Output=Auto, eARC On and PCM8 receiver support may it request
+`Sndout EARC Outputtype=[2,1,8,0,1]`. It never enables OTT/MAT. It restores only its
+own app/output/control lease. No media/account URLs are collected by the broker.
+
+The TV must already have a rooted Homebrew Channel permitting this application
+to call `exec`. A rejected request does not change permissions or system files;
+it leaves the automatic output route unavailable. Native Opus decoding and the
+receiver's actual format remain separate verification stages.
 
 If the platform SDK query fails, the client can read `conf/device-sdk-version`.
 The installer obtains this public version from the actual TV and writes it only
