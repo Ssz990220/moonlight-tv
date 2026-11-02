@@ -59,6 +59,17 @@ def main():
         finally:
             os.close(slave); os.close(master)
     policy.luna = root_luna
+    original_foreground = policy.foreground
+    def owned_foreground():
+        try:
+            if identity() != original:
+                return None
+        except OSError:
+            return None
+        return original_foreground()
+    # A second instance has the same app ID but a different PID/start time.
+    # Never restore or apply the old instance's route to that new owner.
+    policy.foreground = owned_foreground
     run = Path('/tmp') / ('moonlight-opus71-root-' + str(args.pid))
     run.mkdir(mode=0o700, exist_ok=True)
     info = run.lstat()
