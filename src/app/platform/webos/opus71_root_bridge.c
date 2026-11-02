@@ -44,7 +44,10 @@ static void *request_root(void *argument) {
     LSError error;
     LSErrorInit(&error);
     LSMessageToken token = 0;
-    if (LSRegisterApplicationService(NULL, "com.ssz990220.moonlight.opus71", &handle, &error) &&
+    /* A normal native executable is an ordinary LS2 client, not a web-app
+     * proxy entitled to register an application identity. Preserve its actual
+     * UID/executable credentials and let the hub enforce public API policy. */
+    if (LSRegister(NULL, &handle, &error) &&
         LSGmainContextAttach(handle, context, &error) &&
         LSCallOneReply(handle, "luna://org.webosbrew.hbchannel.service/exec", payload,
                        root_reply, loop, &token, &error)) {
