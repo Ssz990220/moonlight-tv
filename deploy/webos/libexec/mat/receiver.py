@@ -111,7 +111,11 @@ class Output:
         from native_identity import NativeIdentity
         self.preflight()
         rows = self.tv.luna('luna://com.webos.media/getActivePipelines', {})
-        if any(any(x.get('resource') == 'ADEC' for x in p.get('resource', [])) for p in rows):
+        # HDMI may retain its independent background TV resource. Do not stop it
+        # or borrow its port; RM must grant a separate audio decoder to us.
+        if any(any(x.get('resource') == 'ADEC' for x in p.get('resource', [])) and not (
+                p.get('type') == 'tv' and {'HDMI_INPUT', 'AHDMIRX'}.issubset(
+                    {x.get('resource') for x in p.get('resource', [])})) for p in rows):
             raise RuntimeError('another audio decoder is active')
         self.previous = self.tv.earc()
         self.resource, self.g = Resource(), Gst()

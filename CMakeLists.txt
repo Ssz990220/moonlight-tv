@@ -189,7 +189,9 @@ else ()
 endif ()
 
 set(BUILD_SHARED_LIBS ${BUILD_SHARED_CORE_LIBS})
+set(BUILD_TESTING ${BUILD_TESTS} CACHE BOOL "Build common-c tests with application tests" FORCE)
 add_subdirectory(core/moonlight-common-c)
+target_link_libraries(moonlight-common-c PRIVATE Threads::Threads)
 
 # moonlight-common-c selects its monotonic clock with #ifdef HAVE_CLOCK_GETTIME, but its own
 # CMakeLists only computes that value and never passes it to the compiler. Without the definition
