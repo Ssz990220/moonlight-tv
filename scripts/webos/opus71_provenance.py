@@ -10,12 +10,13 @@ def revision(path):
 
 value = {
     'appId': 'com.ssz990220.moonlight.opus71',
-    'version': '1.6.98',
+    'version': '1.6.99',
     'moonlightCommit': revision(root),
     'ss4sCommit': revision(root / 'third_party/ss4s'),
+    'commonCommit': revision(root / 'core/moonlight-common-c'),
     'tvInstalled': False,
     'tvRuntimeValidated': False,
-    'outputGoal': 'Opus8/48000 -> native PCM8/acmod21 -> eARC LPCM8; physical mapping unverified',
+    'outputGoal': 'Configurable Auto/Opus/Require MAT; live authenticated MAT to native ES/HBR eARC; integrated AV validation pending',
     'artifacts': {},
 }
 for path in sorted((root / 'dist').glob('*.ipk')):

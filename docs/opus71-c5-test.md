@@ -1,7 +1,7 @@
 # LG C5 Opus 7.1 test build
 
 This is an unvalidated, separate application (`com.ssz990220.moonlight.opus71`,
-version 1.6.98). It does not replace `com.limelight.webos`, DTS Enabler, any system
+version 1.6.99). It does not replace `com.limelight.webos`, DTS Enabler, any system
 library, or a GStreamer plugin. No installer, boot service, root escalation,
 firmware change, or automatic television connection is included.
 
@@ -116,3 +116,42 @@ Confirm Sonos says **Multichannel PCM 7.1**, then test FL, FR, C, LFE, SL, SR, B
 BR individually. A format badge alone is not proof of correct channel mapping.
 Compare 5.1/stereo, standard/high-quality Opus, reconnect and app-exit restoration.
 No television testing was performed during preparation of this build.
+
+## Live MAT receiver in 1.6.99
+
+Audio Settings has a Streaming audio format entry: Auto, Opus, or Require Dolby
+Atmos / MAT. Auto is the default for a configuration without this entry. It
+preflights the TV and requests the host's live MAT profile, selecting Opus before
+ANNOUNCE if the host does not advertise a ready source. GFE, unavailable Homebrew
+Channel, unsupported native library hashes, and unavailable eARC capability select
+Opus in Auto. Require MAT reports an error in those cases. The existing Sound
+Channels setting is preserved and controls Opus, including the Auto fallback.
+No live format switching occurs after audio has started: a failed or corrupted
+MAT transport ends that session rather than interpreting its bytes as Opus.
+
+The pinned common-c fork provides authenticated live MAT codec 7, whole-carrier
+validation, and authenticated end-of-stream. A per-session root helper is requested
+through the already available Homebrew Channel exec API. It checks the registered
+Moonlight process identity, exact helper hashes, local socket peer credentials,
+foreground application, eARC settings, native MAT format, and the audited C5
+library hashes before using a separately reserved ADEC. No system/plugin code,
+roles, drivers, or boot services are modified. The helper relinquishes its route
+if the app/output changes, and releases its resources on EOF, parent exit, or
+source timeout. Only bounded local socket frames carry MAT; no pairing material
+is passed to the helper. The existing NDL player handles video without opening
+its own audio decoder.
+
+This reuses the standalone receiver's native ES/HBR output: byte-swap the encoded
+carrier's 16-bit words, retain the MAT payload, and temporarily request the verified
+[2,6,8,0,0] eARC transport after native format discovery. The auxiliary MAT decoder
+is used only for the first eight cycles of format discovery. It is not the output
+PCM path. The transport's legacy enum label is not a TrueHD conversion.
+
+A separate standalone test verified 30.72 seconds / 1,536 complete live MAT cycles
+from two generated Windows spatial objects on Steam Streaming Speakers to Sonos
+Dolby Atmos (MAT), with matching publisher/receiver hashes and zero sink drops.
+That test was muted and did not establish audible object placement or video sync.
+The integrated app requires its own TV validation; the independent system clock
+and 200 ms audio prebuffer are experimental, not a calibrated AV sync guarantee.
+This app does not install or start Foundation's Windows object capture hooks.
+Foundation must already have a compatible live capture source when MAT is selected.

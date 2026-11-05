@@ -8,6 +8,7 @@
 #include "stream/session_priv.h"
 #include "logging.h"
 #include "opus71_mapping.h"
+#include "session_mat.h"
 
 #define SAMPLES_PER_FRAME  240
 
@@ -16,6 +17,7 @@ static SS4S_Player *player = NULL;
 static OpusMSDecoder *decoder = NULL;
 static unsigned char *buffer = NULL;
 static int frame_size = 0, unit_size = 0;
+static bool mat_active;
 
 AUDIO_INFO audio_stream_info;
 
@@ -30,6 +32,23 @@ static int aud_init(int audioConfiguration, const POPUS_MULTISTREAM_CONFIGURATIO
     memset(&audio_stream_info, 0, sizeof(audio_stream_info));
     session = context;
     player = session->player;
+    mat_active = LiGetNegotiatedAudioCodec() == AUDIO_CODEC_MAT_LIVE;
+    if (mat_active) {
+        if (LiGetNegotiatedAudioCodec() != AUDIO_CODEC_MAT_LIVE ||
+            opusConfig->sampleRate != 48000 || opusConfig->samplesPerFrame != 960 || !session_mat_open()) {
+            streaming_error(session, -1, "Live MAT negotiation or TV audio initialization failed. "
+                            "Enable Foundation MAT and its live capture source, or select Opus.");
+            player = NULL;
+            return -1;
+        }
+        // This player belongs exclusively to the existing video renderer.
+        player = NULL;
+        audio_stream_info.format = "Dolby MAT (live)";
+        audio_stream_info.channels = "Atmos";
+        return 0;
+    }
+    session_mat_close();
+    SS4S_PlayerSetWaitAudioVideoReady(player, true);
     commons_log_info("Session", "Opus configuration: %d channels, %d streams, %d coupled, %d hz",
                      opusConfig->channelCount, opusConfig->streams, opusConfig->coupledStreams,
                      opusConfig->sampleRate);
@@ -95,6 +114,8 @@ static int aud_init(int audioConfiguration, const POPUS_MULTISTREAM_CONFIGURATIO
 }
 
 static void aud_cleanup() {
+    session_mat_close();
+    mat_active = false;
     if (player != NULL) {
         SS4S_PlayerAudioClose(player);
         player = NULL;
@@ -113,6 +134,11 @@ static void aud_buffers_free() {
 }
 
 static void aud_feed(char *sampleData, int sampleLength) {
+    if (mat_active) {
+        // MAT must arrive only through authenticated cycle callbacks.
+        session_interrupt(session, false, STREAMING_INTERRUPT_DECODER);
+        return;
+    }
     if (decoder != NULL) {
         int decode_len = opus_multistream_decode(decoder, (unsigned char *) sampleData, sampleLength,
                                                  (opus_int16 *) buffer, frame_size, 0);

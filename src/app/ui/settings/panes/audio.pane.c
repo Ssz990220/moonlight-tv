@@ -109,6 +109,20 @@ static lv_obj_t *create_obj(lv_fragment_t *self, lv_obj_t *container) {
 
     pref_header(view, locstr("Audio Settings"));
 
+#if TARGET_WEBOS
+    static const pref_dropdown_int_entry_t formats[] = {
+        {"Auto (Atmos when available)", AUDIO_CODEC_MAT_AUTO, true},
+        {"Opus (standard)", AUDIO_CODEC_OPUS, false},
+        {"Require Dolby Atmos / MAT", AUDIO_CODEC_MAT_LIVE, false},
+    };
+    pref_title_label(view, locstr("Streaming audio format"));
+    lv_obj_t *format = pref_dropdown_int(view, formats, 3, &app_configuration->stream.audioCodec, NULL);
+    lv_obj_set_width(format, LV_PCT(100));
+    pref_desc_label(view, locstr("MAT requires Foundation live MAT capture, a compatible rooted LG TV, "
+                               "Homebrew Channel, and an eARC Atmos receiver. Applies to the next stream. "
+                               "Auto uses Opus when MAT is unavailable. Sound Channels below applies to Opus."), false);
+#endif
+
     pref_title_label(view, locstr("Sound Channels (Experimental)"));
 
     lv_obj_t *ch_dropdown = pref_dropdown_int(view, controller->surround_entries, controller->surround_entries_len,

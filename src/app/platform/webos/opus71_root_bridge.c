@@ -9,6 +9,8 @@
 #include <luna-service2/lunaservice.h>
 #include "opus71_root_hashes.h"
 
+bool webos_root_exec(const char *command);
+
 static bool root_reply(LSHandle *handle, LSMessage *message, void *data) {
     (void)handle;
     printf("Root route bridge: %s\n", LSMessageIsHubErrorMessage(message) ? "hub rejected request" : "reply received; status verified separately");
@@ -23,7 +25,7 @@ static gboolean root_timeout(gpointer data) {
 
 static void *request_root(void *argument) {
     char *root = argument;
-    char command[4096], escaped[8192], payload[8400];
+    char command[4096];
     int n = snprintf(command, sizeof(command),
         "/usr/bin/python3 -I -B -c 'import hashlib; p=\"%s/libexec/opus71_root.py\"; "
         "d=open(p,\"rb\").read(); assert hashlib.sha256(d).hexdigest()==\"%s\"; "
@@ -31,8 +33,16 @@ static void *request_root(void *argument) {
         ">/dev/null 2>&1 </dev/null &", root, OPUS71_ROOT_SHA, (long)getpid(), root, OPUS71_POLICY_SHA);
     free(root);
     if (n <= 0 || n >= (int)sizeof(command)) return NULL;
+    webos_root_exec(command);
+    return NULL;
+}
+
+bool webos_root_exec(const char *command) {
+    char escaped[8192], payload[8400];
+    size_t n = strlen(command);
+    if (n >= 4000) return false;
     size_t out = 0;
-    for (int i = 0; i < n; ++i) {
+    for (size_t i = 0; i < n; ++i) {
         if (command[i] == '"' || command[i] == '\\') escaped[out++] = '\\';
         escaped[out++] = command[i];
     }
@@ -47,10 +57,12 @@ static void *request_root(void *argument) {
     /* A normal native executable is an ordinary LS2 client, not a web-app
      * proxy entitled to register an application identity. Preserve its actual
      * UID/executable credentials and let the hub enforce public API policy. */
+    bool accepted = false;
     if (LSRegister(NULL, &handle, &error) &&
         LSGmainContextAttach(handle, context, &error) &&
         LSCallOneReply(handle, "luna://org.webosbrew.hbchannel.service/exec", payload,
                        root_reply, loop, &token, &error)) {
+        accepted = true;
         GSource *timeout = g_timeout_source_new(5000);
         g_source_set_callback(timeout, root_timeout, loop, NULL);
         g_source_attach(timeout, context);
@@ -64,7 +76,7 @@ static void *request_root(void *argument) {
     LSErrorFree(&error);
     g_main_loop_unref(loop);
     g_main_context_unref(context);
-    return NULL;
+    return accepted;
 }
 
 void opus71_root_bridge_start(void) {

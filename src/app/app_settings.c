@@ -55,6 +55,7 @@ void settings_initialize(app_settings_t *config, char *conf_dir) {
     config->stream.packetSize = 1392;
     config->stream.streamingRemotely = STREAM_CFG_AUTO;
     config->stream.audioConfiguration = AUDIO_CONFIGURATION_STEREO;
+    config->stream.audioCodec = AUDIO_CODEC_MAT_AUTO;
 
     config->debug_level = 0;
     set_string(&config->language, "auto");
@@ -144,6 +145,8 @@ bool settings_save(app_settings_t *config) {
     ini_write_bool(fp, "av1", config->av1);
 
     ini_write_section(fp, "audio");
+    ini_write_string(fp, "format", config->stream.audioCodec == AUDIO_CODEC_MAT_LIVE ? "mat" :
+                     config->stream.audioCodec == AUDIO_CODEC_MAT_AUTO ? "auto" : "opus");
     ini_write_string(fp, "backend", config->audio_backend);
     if (config->audio_device && config->audio_device[0]) {
         ini_write_string(fp, "device", config->audio_device);
@@ -325,6 +328,9 @@ static int settings_parse(app_settings_t *config, const char *section, const cha
         config->syskey_capture = INI_IS_TRUE(value);
     } else if (INI_FULL_MATCH("video", "decoder")) {
         set_string(&config->decoder, value);
+    } else if (INI_FULL_MATCH("audio", "format")) {
+        config->stream.audioCodec = strcmp(value, "mat") == 0 ? AUDIO_CODEC_MAT_LIVE :
+                                    strcmp(value, "auto") == 0 ? AUDIO_CODEC_MAT_AUTO : AUDIO_CODEC_OPUS;
     } else if (INI_FULL_MATCH("audio", "backend")) {
         set_string(&config->audio_backend, value);
     } else if (INI_FULL_MATCH("audio", "device")) {

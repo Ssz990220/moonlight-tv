@@ -247,6 +247,13 @@ bool streaming_sops_supported(PDISPLAY_MODE modes, int w, int h, int fps) {
 void session_config_init(app_t *app, session_config_t *config, const SERVER_DATA *server,
                          const CONFIGURATION *app_config) {
     config->stream = app_config->stream;
+    config->stream.audioCodec = AUDIO_CODEC_OPUS;
+#if TARGET_WEBOS
+    if ((app_config->stream.audioCodec == AUDIO_CODEC_MAT_LIVE ||
+         app_config->stream.audioCodec == AUDIO_CODEC_MAT_AUTO)) {
+        config->stream.audioCodec = app_config->stream.audioCodec;
+    }
+#endif
     config->vmouse = app_config->virtual_mouse;
     config->touchpad_mode = app_config->touchpad_mode;
     config->touchpad_speed = app_config->touchpad_speed;

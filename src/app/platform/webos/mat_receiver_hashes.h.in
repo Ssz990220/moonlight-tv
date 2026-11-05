@@ -1,0 +1,3 @@
+#pragma once
+#define MAT_RECEIVER_SHA "@MAT_RECEIVER_SHA@"
+#define MAT_MANIFEST_SHA "@MAT_MANIFEST_SHA@"

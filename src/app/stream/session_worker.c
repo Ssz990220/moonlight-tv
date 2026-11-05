@@ -11,6 +11,7 @@
 #include "stream/video/session_video.h"
 #include "app_session.h"
 #include "backend/pcmanager/worker/worker.h"
+#include "audio/session_mat.h"
 
 int session_worker(session_t *session) {
     app_t *app = session->app;
@@ -20,6 +21,7 @@ int session_worker(session_t *session) {
     PSERVER_DATA server = session->server;
     int appId = session->app_id;
     session->player = NULL;
+    bool mat = session->config.stream.audioCodec != AUDIO_CODEC_OPUS;
 
 #if FEATURE_INPUT_EVMOUSE
     if (!session->config.view_only && session->config.hardware_mouse) {
@@ -29,6 +31,18 @@ int session_worker(session_t *session) {
 
     commons_log_info("Session", "Launch app %d...", appId);
     GS_CLIENT client = app_gs_client_new(app);
+    if (mat && (server->isGfe || !session_mat_prepare())) {
+        if (session->config.stream.audioCodec == AUDIO_CODEC_MAT_AUTO) {
+            session->config.stream.audioCodec = AUDIO_CODEC_OPUS;
+            mat = false;
+        } else {
+            session_set_state(session, STREAMING_ERROR);
+            streaming_error(session, GS_WRONG_STATE,
+                "MAT receiver unavailable. Check Homebrew Channel, HDMI eARC, and the supported TV firmware; "
+                "or select Opus in Audio Settings.");
+            goto thread_cleanup;
+        }
+    }
     const char *surround_params = NULL;
 #if TARGET_WEBOS
     if (session->config.stream.audioConfiguration == AUDIO_CONFIGURATION_51_SURROUND) {
@@ -57,7 +71,8 @@ int session_worker(session_t *session) {
                      CHANNEL_COUNT_FROM_AUDIO_CONFIGURATION(session->config.stream.audioConfiguration));
 
     session->player = SS4S_PlayerOpen();
-    SS4S_PlayerSetWaitAudioVideoReady(session->player, true);
+    // MAT owns a separate native audio resource; NDL must run video-only.
+    SS4S_PlayerSetWaitAudioVideoReady(session->player, !mat);
     SS4S_PlayerSetViewportSize(session->player, app->ui.width, app->ui.height);
     SS4S_PlayerSetUserdata(session->player, app);
 
@@ -128,6 +143,7 @@ int session_worker(session_t *session) {
     // Don't always reset status as error state should be kept
     session_set_state(session, STREAMING_NONE);
     thread_cleanup:
+    session_mat_close();
     session_connection_callbacks_reset(session);
     if (session->player != NULL) {
         SS4S_PlayerClose(session->player);

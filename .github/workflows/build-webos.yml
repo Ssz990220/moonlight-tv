@@ -70,6 +70,7 @@ jobs:
         run: |
           third_party/ss4s/tests/run-opus71-tests.sh /tmp/ss4s-opus71-tests
           python3 -B tests/test_opus71_policy.py
+          python3 -B tests/test_mat_receiver.py
           cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -g tests/test_opus71_mapping.c -Isrc/app/stream/audio $(pkg-config --cflags --libs opus) -lm -o /tmp/moonlight-opus71-mapping
           /tmp/moonlight-opus71-mapping
           cc -std=c11 -Wall -Wextra -Werror tests/test_opus71_sdk.c -Isrc/app/platform/webos -Ithird_party/commons/os/info -Ithird_party/commons/util/version-info -o /tmp/moonlight-opus71-sdk

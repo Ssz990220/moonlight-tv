@@ -35,6 +35,7 @@ void testReadINI() {
 }
 
 void testWriteINI() {
+    settings.stream.audioCodec = AUDIO_CODEC_MAT_AUTO;
     settings.touchpad_mode = TOUCHPAD_MODE_MOUSE;
     settings.touchpad_speed = 175;
     settings.touchpad_multitouch = false;
@@ -54,6 +55,7 @@ void testWriteINI() {
 
     TEST_ASSERT_EQUAL_INT(TOUCHPAD_MODE_MOUSE, loaded.touchpad_mode);
     TEST_ASSERT_EQUAL_INT(175, loaded.touchpad_speed);
+    TEST_ASSERT_EQUAL_INT(AUDIO_CODEC_MAT_AUTO, loaded.stream.audioCodec);
     TEST_ASSERT_FALSE(loaded.touchpad_multitouch);
     TEST_ASSERT_FALSE(loaded.touchpad_natural_scroll);
 
@@ -62,10 +64,29 @@ void testWriteINI() {
 }
 
 void testControllerTouchpadDefaults() {
+    TEST_ASSERT_EQUAL_INT(AUDIO_CODEC_MAT_AUTO, settings.stream.audioCodec);
     TEST_ASSERT_EQUAL_INT(TOUCHPAD_MODE_NATIVE, settings.touchpad_mode);
     TEST_ASSERT_EQUAL_INT(TOUCHPAD_SPEED_DEFAULT, settings.touchpad_speed);
     TEST_ASSERT_TRUE(settings.touchpad_multitouch);
     TEST_ASSERT_TRUE(settings.touchpad_natural_scroll);
+}
+
+void testAudioFormatCompatibility() {
+    const char *values[] = {"opus", "auto", "mat", "unknown"};
+    const int expected[] = {AUDIO_CODEC_OPUS, AUDIO_CODEC_MAT_AUTO, AUDIO_CODEC_MAT_LIVE, AUDIO_CODEC_OPUS};
+    for (unsigned int i = 0; i < 4; ++i) {
+        FILE *fp = fopen("settings_audio_tmp.ini", "w");
+        TEST_ASSERT_NOT_NULL(fp);
+        fprintf(fp, "[audio]\nformat=%s\nsurround=5.1ch\n", values[i]);
+        fclose(fp);
+        char *saved = settings.ini_path;
+        settings.ini_path = "settings_audio_tmp.ini";
+        TEST_ASSERT_TRUE(settings_read(&settings));
+        settings.ini_path = saved;
+        TEST_ASSERT_EQUAL_INT(expected[i], settings.stream.audioCodec);
+        TEST_ASSERT_EQUAL_INT(AUDIO_CONFIGURATION_51_SURROUND, settings.stream.audioConfiguration);
+    }
+    remove("settings_audio_tmp.ini");
 }
 
 void testControllerTouchpadUnknownMode() {
@@ -97,5 +118,6 @@ int main() {
     RUN_TEST(testWriteINI);
     RUN_TEST(testControllerTouchpadDefaults);
     RUN_TEST(testControllerTouchpadUnknownMode);
+    RUN_TEST(testAudioFormatCompatibility);
     return UNITY_END();
 }
