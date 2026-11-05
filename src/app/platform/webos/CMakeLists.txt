@@ -20,3 +20,5 @@ install(FILES "${CMAKE_BINARY_DIR}/mat-manifest.json" DESTINATION libexec/mat RE
 pkg_check_modules(OPUS71_LS2 REQUIRED luna-service2 glib-2.0)
 target_include_directories(moonlight-lib SYSTEM PRIVATE ${OPUS71_LS2_INCLUDE_DIRS})
 target_link_libraries(moonlight-lib PUBLIC ${OPUS71_LS2_LIBRARIES})
+target_sources(moonlight PRIVATE "${CMAKE_SOURCE_DIR}/src/app/stream/audio/mat_sdp.c")
+target_link_options(moonlight PRIVATE "-Wl,--wrap=getSdpPayloadForStreamConfig")

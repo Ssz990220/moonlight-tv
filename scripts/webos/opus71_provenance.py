@@ -10,7 +10,7 @@ def revision(path):
 
 value = {
     'appId': 'com.ssz990220.moonlight.opus71',
-    'version': '1.6.99',
+    'version': '1.6.100',
     'moonlightCommit': revision(root),
     'ss4sCommit': revision(root / 'third_party/ss4s'),
     'commonCommit': revision(root / 'core/moonlight-common-c'),

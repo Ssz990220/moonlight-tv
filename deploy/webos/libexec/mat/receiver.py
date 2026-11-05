@@ -85,6 +85,7 @@ class Output:
         self.previous = None
         self.sound = None
         self.count = 0
+        self.input_digest = hashlib.sha256()
         self.origin = self.last_end = None
 
     def settings(self):
@@ -162,6 +163,7 @@ class Output:
         from runtime import P, U, bind
         g = self.g
         encoded = to_lg_carrier(payload, crc)
+        self.input_digest.update(payload)
         if self.origin is None:
             self.origin = self.running() + 200000000
         stamp = self.origin + pts * 1000000000 // 48000
@@ -221,6 +223,9 @@ class Output:
                 call()
             except BaseException:
                 errors.append(name)
+        if self.g and self.sink:
+            attempt('final-stats', lambda: self.report('stopping', cycles=self.count,
+                    stats=self.g.stats(self.sink), inputSha256=self.input_digest.hexdigest()))
         if self.pipeline:
             attempt('pipeline-stop', lambda: self.g.gst_element_set_state(self.pipeline, 1))
         if self.connected:
@@ -335,9 +340,11 @@ def main():
             return identity(args.pid) == original
         except (OSError, RuntimeError):
             return False
+    journal = {}
     def report(phase, **values):
+        journal.update(phase=phase, nativePid=args.pid, **values)
         temp = run / 'status.tmp'
-        temp.write_text(json.dumps(dict(phase=phase, nativePid=args.pid, **values)))
+        temp.write_text(json.dumps(journal))
         temp.replace(run / 'status.json')
     from runtime import Tv
     tv = Tv()
