@@ -92,6 +92,8 @@ class Output:
             'category': 'sound', 'keys': ['soundOutput', 'soundOutputDigital', 'eArcSupport']})['settings']
 
     def preflight(self):
+        if C.sizeof(C.c_void_p) != 4:
+            raise RuntimeError('unsupported native audio pointer ABI')
         for path, expected in ABI.items():
             if hashlib.sha256(Path(path).read_bytes()).hexdigest() != expected:
                 raise RuntimeError('unsupported native audio ABI')
@@ -317,6 +319,10 @@ def main():
         return 1
     load_dependencies(args.root, args.manifest_sha)
     run = Path(tempfile.mkdtemp(prefix='moonlight-mat-root-'))
+    # Use the TV's existing registry as a read-only seed. With registry updates
+    # disabled, an empty private path would have no registered vendor factories.
+    (run / 'registry.bin').write_bytes(Path('/mnt/flash/data/gst_1_0_registry.arm.bin').read_bytes())
+    os.chmod(str(run / 'registry.bin'), 0o600)
     os.environ.update(GST_REGISTRY=str(run / 'registry.bin'), GST_DEBUG_FILE=str(run / 'gst.log'), GST_DEBUG='0')
     stopped = [False]
     for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):

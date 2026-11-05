@@ -67,7 +67,8 @@ static void connection_set_controller_led(uint16_t controllerNumber, uint8_t r, 
     app_input_gamepad_set_controller_led(&current_session->app->input, controllerNumber, r, g, b);
 }
 
-static void connection_set_hdr(bool hdrEnabled) {
+static void connection_set_hdr(bool hdrEnabled, void *context) {
+    (void)context;
     streaming_set_hdr(current_session, hdrEnabled);
 }
 
