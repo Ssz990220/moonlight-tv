@@ -167,7 +167,10 @@ class Output:
         if self.origin is None:
             self.origin = self.running() + 200000000
         stamp = self.origin + pts * 1000000000 // 48000
-        if self.count < 8:
+        # Format discovery needs only a complete carrier. The decoded PCM is
+        # deliberately not consumed; a larger game bed can fill that unused
+        # native buffer if eight full carriers are fed during startup.
+        if self.count < 2:
             self.native.feed(encoded, stamp)
         if g.prop(self.sink, 'pcm-bypass', C.c_int) or g.prop(self.sink, 'pcm-multi-ch', C.c_int):
             raise RuntimeError('MAT PCM processing mode changed')

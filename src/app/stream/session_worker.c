@@ -77,6 +77,11 @@ int session_worker(session_t *session) {
     SS4S_PlayerSetUserdata(session->player, app);
 
     AUDIO_RENDERER_CALLBACKS audio_callbacks = ss4s_aud_callbacks;
+    if (mat) {
+        // Keep MAT's network receive/FEC thread independent of local IPC and
+        // native decoder priming, as in the verified standalone receiver.
+        audio_callbacks.capabilities &= ~CAPABILITY_DIRECT_SUBMIT;
+    }
 #if TARGET_WEBOS
     if (getenv("SS4S_WEBOS_OPUS71") && session->audio_cap.maxChannels >= 8 &&
         (session->audio_cap.codecs & SS4S_AUDIO_OPUS) &&

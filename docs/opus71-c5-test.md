@@ -144,7 +144,7 @@ its own audio decoder.
 This reuses the standalone receiver's native ES/HBR output: byte-swap the encoded
 carrier's 16-bit words, retain the MAT payload, and temporarily request the verified
 [2,6,8,0,0] eARC transport after native format discovery. The auxiliary MAT decoder
-is used only for the first eight cycles of format discovery. It is not the output
+is used only for the first two cycles of format discovery. It is not the output
 PCM path. The transport's legacy enum label is not a TrueHD conversion.
 
 A separate standalone test verified 30.72 seconds / 1,536 complete live MAT cycles
@@ -155,3 +155,9 @@ The integrated app requires its own TV validation; the independent system clock
 and 200 ms audio prebuffer are experimental, not a calibrated AV sync guarantee.
 This app does not install or start Foundation's Windows object capture hooks.
 Foundation must already have a compatible live capture source when MAT is selected.
+
+Live MAT/Auto requests use the common-c decoder queue so local IPC and native
+format discovery cannot block the network/FEC receive thread. Explicit Opus
+retains its original direct-submit behavior. Version 1.6.100 also compacts only
+the MAT SDP formatting spaces to fit Foundation’s encrypted RTSP size limit;
+Opus SDP remains byte-identical.
