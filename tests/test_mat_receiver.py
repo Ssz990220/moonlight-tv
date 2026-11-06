@@ -8,6 +8,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parents[1] / 'deploy/webos/libexec/mat'
 sys.path.insert(0, str(HERE))
@@ -39,6 +40,26 @@ class Output:
 
 
 class ReceiverTests(unittest.TestCase):
+    def test_progress_distinguishes_late_arrival_and_local_buffering(self):
+        events = []
+        output = receiver.Output(None, lambda phase, **values: events.append((phase, values)))
+        output.count = 250
+        output.first_arrival = 10.0
+        output.last_end = 5200000000
+        output.running = lambda: 5100000000
+        class FakeGst:
+            def stats(self, sink): return {'rendered': 244, 'dropped': 0}
+            def prop(self, src, name, ctype): return 122880
+        output.g = FakeGst()
+        with patch.object(receiver.time, 'monotonic', return_value=15.2):
+            output.progress()
+        phase, values = events[0]
+        self.assertEqual(phase, 'output-progress')
+        self.assertEqual(values['presentationLeadMs'], 100.0)
+        self.assertEqual(values['arrivalAgeMs'], 200.0)
+        self.assertEqual(values['queuedBytes'], 122880)
+        self.assertEqual(values['stats']['rendered'], 244)
+
     def pair(self):
         client, server = socket.socketpair()
         client.settimeout(2)

@@ -58,6 +58,7 @@ static void connection_status_update(int status) {
 }
 
 static void connection_stage_failed(int stage, int errorCode) {
+    commons_log_error("Session", "Stream stage failure stage=%d error=%d", stage, errorCode);
     const char *stageName = LiGetStageName(stage);
     commons_log_error("Session", "Connection failed at stage %d (%s), errorCode = %d (%s)", stage, stageName, errorCode,
                       strerror(errorCode));

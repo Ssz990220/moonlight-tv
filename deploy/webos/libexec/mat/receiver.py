@@ -87,6 +87,7 @@ class Output:
         self.count = 0
         self.input_digest = hashlib.sha256()
         self.origin = self.last_end = None
+        self.first_arrival = None
 
     def settings(self):
         return self.tv.luna('luna://com.webos.settingsservice/getSystemSettings', {
@@ -165,6 +166,7 @@ class Output:
         encoded = to_lg_carrier(payload, crc)
         self.input_digest.update(payload)
         if self.origin is None:
+            self.first_arrival = time.monotonic()
             self.origin = self.running() + 200000000
         stamp = self.origin + pts * 1000000000 // 48000
         # Format discovery needs only a complete carrier. The decoded PCM is
@@ -179,6 +181,8 @@ class Output:
         g.push(self.src, encoded, stamp, 20000000, self.segment, 0x200000)
         self.last_end = stamp + 20000000
         self.count += 1
+        if self.count % 250 == 0:
+            self.progress()
         if self.count >= 75 and not self.route_written:
             words = self.native.snapshot()['decodedInfoWords']
             if words[1] == 5 and words[2] == 48000 and 1 <= words[4] <= 32:
@@ -196,6 +200,16 @@ class Output:
                 self.report('output-active', nativeFormat=words[1], cycles=self.count)
             elif self.count > 250:
                 raise RuntimeError('MAT native format discovery failed')
+
+    def progress(self):
+        from runtime import U
+        # Numeric timing evidence only. This measures the app pipeline, not
+        # Sonos acoustic latency or the native encoder's media PTS mapping.
+        now = self.running()
+        self.report('output-progress', cycles=self.count, stats=self.g.stats(self.sink),
+                    queuedBytes=self.g.prop(self.src, 'current-level-bytes', U),
+                    presentationLeadMs=round((self.last_end - now) / 1000000, 3),
+                    arrivalAgeMs=round((time.monotonic() - self.first_arrival) * 1000 - self.count * 20, 3))
 
     def check_bus(self):
         message = self.g.gst_bus_timed_pop_filtered(self.bus, 0, 2)

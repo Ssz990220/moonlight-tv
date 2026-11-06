@@ -40,6 +40,7 @@ def capture_startup(stream, root):
         ('control_disconnect_timeout', r'Disconnect event timeout expired\s*$'),
         ('control_peer_disconnected', r'Control stream received unexpected disconnect event\s*$'),
         ('terminated', r'Connection terminated, errorCode = 0x([0-9a-fA-F]+)\s*$'),
+        ('stage_failed', r'Stream stage failure stage=(-?\d+) error=(-?\d+)\s*$'),
         ('socket_start', r'Stream diagnostics start rcvbuf=(-?\d+) queued=(-?\d+) drops=(-?\d+)\s*$'),
         ('socket_end', r'Stream diagnostics end rcvbuf=(-?\d+) queued=(-?\d+) drops=(-?\d+)\s*$'),
     )
