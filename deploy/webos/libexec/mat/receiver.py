@@ -170,7 +170,7 @@ class Output:
         self.input_digest.update(payload)
         if self.origin is None:
             self.first_arrival = time.monotonic()
-            self.origin = self.running() + 200000000
+            self.origin = self.running() + 80000000
         stamp = self.origin + pts * 1000000000 // 48000
         # Format discovery needs only a complete carrier. The decoded PCM is
         # deliberately not consumed; a larger game bed can fill that unused
