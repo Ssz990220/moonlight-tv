@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 import json
+import io
 import os
 import select
 import subprocess
@@ -26,6 +27,39 @@ def log(pid=123, acmod=21, start=10):
 
 
 class PolicyTest(unittest.TestCase):
+    def test_failure_journal_is_numeric_bounded_and_survives_startup_limit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            lines = ['System: webOS\n'] * 30
+            lines += ['AUTH_TOKEN=private https://secret.invalid/?key=private\n',
+                      'Live MAT authentication/sequence/source failed private-token\n',
+                      'Stream diagnostics start rcvbuf=212992 queued=0 drops=0\n']
+            lines += ['Audio packet queue overflow\n'] * 40
+            lines += ['Network dropped audio data (expected 12, but received 15)\n',
+                      'Stream diagnostics end rcvbuf=212992 queued=65536 drops=3\n',
+                      'Connection terminated, errorCode = 0xffffffff\n']
+            p.capture_startup(io.StringIO(''.join(lines)), root)
+            file = root / 'cache/stream-diagnostics.json'
+            raw = file.read_text()
+            events = json.loads(raw)['events']
+            self.assertEqual(len(events), 32)
+            self.assertEqual(events[-3]['kind'], 'audio_gap')
+            self.assertEqual(events[-3]['values'], [12, 15])
+            self.assertEqual(events[-2]['values'], [212992, 65536, 3])
+            self.assertEqual(events[-1]['values'], [0xffffffff])
+            self.assertNotIn('private', raw)
+            self.assertNotIn('https', raw)
+            self.assertEqual(file.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(len(json.loads((root / 'cache/opus71-startup.json').read_text())['backendInitialization']), 24)
+
+    def test_failure_labels_are_not_suppressed_by_missing_startup_messages(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            p.capture_startup(io.StringIO('MAT validated input timed out (no verified EOS)\n'
+                                         'Live MAT authentication/sequence/source failed\n'), root)
+            events = json.loads((root / 'cache/stream-diagnostics.json').read_text())['events']
+            self.assertEqual([x['kind'] for x in events], ['mat_timeout', 'mat_input_failed'])
+
     @unittest.skipUnless(Path('/proc/self/fd').exists(), 'Linux worker FD lifecycle')
     def test_live_format_can_recover_after_initial_six_channel_caps(self):
         with tempfile.TemporaryDirectory() as temporary:

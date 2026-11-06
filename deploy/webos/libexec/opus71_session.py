@@ -22,8 +22,27 @@ TARGET = [2, 1, 8, 0, 1]
 
 
 def capture_startup(stream, root):
-    """Retain backend initialization messages only, never connection/media logs."""
+    """Retain initialization and bounded numeric failure evidence, never raw logs."""
     rows = []
+    events = []
+    started = time.monotonic()
+    # Exact suffixes: persist labels/numbers only, never arbitrary log text.
+    failures = (
+        ('mat_timeout', r'MAT validated input timed out \(no verified EOS\)\s*$'),
+        ('mat_input_failed', r'Live MAT authentication/sequence/source failed\s*$'),
+        ('audio_queue_full', r'Audio packet queue overflow\s*$'),
+        ('audio_allocation_failed', r'Audio Receive: malloc\(\) failed\s*$'),
+        ('video_allocation_failed', r'Video Receive: malloc\(\) failed\s*$'),
+        ('audio_gap', r'Network dropped audio data \(expected (\d+), but received (\d+)\)\s*$'),
+        ('audio_receive_failed', r'Audio Receive: recvUdpSocket\(\) failed: (-?\d+)\s*$'),
+        ('video_receive_failed', r'Video Receive: recvUdpSocket\(\) failed: (-?\d+)\s*$'),
+        ('control_failed', r'Control stream connection failed: (-?\d+)\s*$'),
+        ('control_disconnect_timeout', r'Disconnect event timeout expired\s*$'),
+        ('control_peer_disconnected', r'Control stream received unexpected disconnect event\s*$'),
+        ('terminated', r'Connection terminated, errorCode = 0x([0-9a-fA-F]+)\s*$'),
+        ('socket_start', r'Stream diagnostics start rcvbuf=(-?\d+) queued=(-?\d+) drops=(-?\d+)\s*$'),
+        ('socket_end', r'Stream diagnostics end rcvbuf=(-?\d+) queued=(-?\d+) drops=(-?\d+)\s*$'),
+    )
     pattern = re.compile(r'(?:Module `[^`]+` (?:can.t be loaded|check result):.*|'
                          r'(?:Video|Audio) module:.*|Video capability: [0-9 x,FPSp]+|'
                          r'Panel native resolution: [0-9 x,:a-z]+|'
@@ -42,6 +61,26 @@ def capture_startup(stream, root):
                 return
             yield line
     for line in lines():
+        for kind, expression in failures:
+            failure = re.search(expression, line)
+            if not failure:
+                continue
+            base = 16 if kind == 'terminated' else 10
+            events.append({'kind': kind, 'seconds': round(time.monotonic() - started, 3),
+                           'values': [int(x, base) for x in failure.groups()]})
+            events = events[-32:]
+            try:
+                folder = root / 'cache'
+                folder.mkdir(exist_ok=True)
+                target = folder / 'stream-diagnostics.json'
+                temporary = folder / 'stream-diagnostics.tmp'
+                fd = os.open(str(temporary), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, 'w') as output:
+                    json.dump({'events': events}, output)
+                temporary.replace(target)
+            except OSError:
+                pass
+            break
         match = pattern.search(line)
         if not match or len(rows) >= 24:
             continue

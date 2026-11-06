@@ -70,6 +70,8 @@ jobs:
         run: |
           third_party/ss4s/tests/run-opus71-tests.sh /tmp/ss4s-opus71-tests
           python3 -B tests/test_opus71_policy.py
+          cc -std=c11 -Wall -Wextra -Werror tests/test_stream_diagnostics.c -Isrc/app/stream/connection -o /tmp/moonlight-stream-diagnostics
+          /tmp/moonlight-stream-diagnostics
           python3 -B tests/test_mat_receiver.py
           cc -std=c11 -Wall -Wextra -Werror tests/test_mat_sdp.c src/app/stream/audio/mat_sdp.c -Icore/moonlight-common-c/src -o /tmp/moonlight-mat-sdp
           /tmp/moonlight-mat-sdp

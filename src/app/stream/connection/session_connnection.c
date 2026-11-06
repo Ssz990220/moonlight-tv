@@ -6,10 +6,26 @@
 #include "input/input_gamepad.h"
 #include "app.h"
 #include "stream/session_priv.h"
+#include "stream_diagnostics.h"
 
 static session_t *current_session = NULL;
 
+static void log_stream_diagnostics(const char *phase) {
+    LI_STREAM_SOCKETS sockets;
+    LiGetStreamSockets(&sockets);
+    int buffer;
+    long queued, drops;
+    stream_audio_diagnostics(sockets.audioRtp.fd, &buffer, &queued, &drops);
+    commons_log_info("Session", "Stream diagnostics %s rcvbuf=%d queued=%ld drops=%ld",
+                     phase, buffer, queued, drops);
+}
+
+static void connection_started(void) {
+    log_stream_diagnostics("start");
+}
+
 static void connection_terminated(int errorCode) {
+    log_stream_diagnostics("end");
     if (errorCode == ML_ERROR_GRACEFUL_TERMINATION) {
         session_interrupt(current_session, false, STREAMING_INTERRUPT_HOST);
     } else {
@@ -76,7 +92,7 @@ CONNECTION_LISTENER_CALLBACKS connection_callbacks = {
         .stageStarting = NULL,
         .stageComplete = NULL,
         .stageFailed = connection_stage_failed,
-        .connectionStarted = NULL,
+        .connectionStarted = connection_started,
         .connectionTerminated = connection_terminated,
         .logMessage = connection_log_message,
         .rumble = connection_rumble,
