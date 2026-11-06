@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 import hashlib
 import json
+import re
 from pathlib import Path
 import subprocess
 
 root = Path(__file__).resolve().parents[2]
+versions = re.findall(r'^set\(MOONLIGHT_VERSION "([0-9]+\.[0-9]+\.[0-9]+)"\)$',
+                      (root / 'CMakeLists.txt').read_text(), re.M)
+assert len(versions) == 1, 'Expected one explicit experimental app version'
 def revision(path):
     return subprocess.check_output(['git', '-C', str(path), 'rev-parse', 'HEAD'], text=True).strip()
 
 value = {
     'appId': 'com.ssz990220.moonlight.opus71',
-    'version': '1.6.101',
+    'version': versions[0],
     'moonlightCommit': revision(root),
     'ss4sCommit': revision(root / 'third_party/ss4s'),
     'commonCommit': revision(root / 'core/moonlight-common-c'),
