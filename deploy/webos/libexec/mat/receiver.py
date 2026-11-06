@@ -107,7 +107,12 @@ class Output:
         fields = [('renderDelayNs', 'render-delay', U),
                   ('processingDeadlineNs', 'processing-deadline', U),
                   ('timestampOffsetNs', 'ts-offset', C.c_int64),
-                  ('sync', 'sync', C.c_int), ('lipsync', 'lipsync', C.c_int)]
+                  ('sync', 'sync', C.c_int), ('lipsync', 'lipsync', C.c_int),
+                  ('noDelay', 'nodelay', C.c_int), ('noDelayMode', 'nodelay-mode', C.c_uint),
+                  ('backendDelayReported', 'audio-be-delay', C.c_uint),
+                  ('playbackThresholdMs', 'base-playback-threshold', C.c_uint),
+                  ('nativeBufferUsedReported', 'directmedia-used-audio-buffer-size', C.c_int),
+                  ('nativeBufferTotalReported', 'directmedia-total-audio-buffer-size', C.c_int)]
         timing = {key: g.prop(self.sink, name, ctype) for key, name, ctype in fields}
         timing.update(sinkLatencyNs=int(self._sink_latency(self.sink)),
                       pipelineLatencyNs=int(self._pipeline_latency(self.pipeline)),
