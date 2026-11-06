@@ -18,6 +18,7 @@ import stat
 import struct
 import sys
 import tempfile
+import threading
 import time
 import types
 
@@ -82,12 +83,14 @@ class Output:
         self.resource = self.g = self.native = None
         self.pipeline = self.src = self.sink = self.bus = self.segment = None
         self.connected = self.route_written = False
+        self.route_confirmed = False
         self.previous = None
         self.sound = None
         self.count = 0
         self.input_digest = hashlib.sha256()
         self.origin = self.last_end = None
         self.first_arrival = None
+        self.control_check_ms = self.max_control_check_ms = 0
 
     def settings(self):
         return self.tv.luna('luna://com.webos.settingsservice/getSystemSettings', {
@@ -197,6 +200,7 @@ class Output:
                     raise RuntimeError('MAT output context unavailable')
                 bind(C.CDLL('/usr/lib/gstreamer-1.0/libgstlgaudiosink.so'),
                      'lgao_push_first_event', [P], C.c_int)(ao)
+                self.route_confirmed = True
                 self.report('output-active', nativeFormat=words[1], cycles=self.count)
             elif self.count > 250:
                 raise RuntimeError('MAT native format discovery failed')
@@ -209,7 +213,8 @@ class Output:
         self.report('output-progress', cycles=self.count, stats=self.g.stats(self.sink),
                     queuedBytes=self.g.prop(self.src, 'current-level-bytes', U),
                     presentationLeadMs=round((self.last_end - now) / 1000000, 3),
-                    arrivalAgeMs=round((time.monotonic() - self.first_arrival) * 1000 - self.count * 20, 3))
+                    arrivalAgeMs=round((time.monotonic() - self.first_arrival) * 1000 - self.count * 20, 3),
+                    controlCheckMs=self.control_check_ms, maxControlCheckMs=self.max_control_check_ms)
 
     def check_bus(self):
         message = self.g.gst_bus_timed_pop_filtered(self.bus, 0, 2)
@@ -268,21 +273,81 @@ class Output:
         return not errors
 
 
+class OwnershipWatch:
+    """Poll control services away from the audio feeder; stale proof still fails."""
+    def __init__(self, output, alive):
+        self.output, self.alive = output, alive
+        self.stop = threading.Event()
+        self.lock = threading.Lock()
+        self.verified = time.monotonic()
+        self.failure = None
+        self.thread = None
+
+    def start(self):
+        # Output.open just completed the synchronous ownership preflight.
+        self.verified = time.monotonic()
+        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread.start()
+
+    def run(self):
+        while not self.stop.is_set():
+            began = time.monotonic()
+            try:
+                owned = self.alive() and self.output.still_owned()
+                if owned and getattr(self.output, 'route_confirmed', self.output.route_written):
+                    owned = self.output.tv.earc() == TARGET
+                failure = None if owned else 'MAT session owner changed'
+            except Exception:
+                failure = 'MAT ownership verification unavailable'
+            self.output.control_check_ms = round((time.monotonic() - began) * 1000, 3)
+            self.output.max_control_check_ms = max(getattr(self.output, 'max_control_check_ms', 0),
+                                                   self.output.control_check_ms)
+            with self.lock:
+                self.failure = failure
+                self.verified = time.monotonic()
+            if failure or self.stop.wait(.5):
+                return
+
+    def check(self):
+        if self.thread is None:
+            return
+        with self.lock:
+            failure, verified = self.failure, self.verified
+        if failure:
+            raise RuntimeError(failure)
+        if time.monotonic() - verified > 2:
+            raise RuntimeError('MAT ownership verification stalled')
+
+    def close(self):
+        self.stop.set()
+        if self.thread:
+            # Finish read-only control requests before the caller closes its
+            # PTY and native resources. Each existing request is bounded.
+            self.thread.join(12)
+
+
 def serve(channel, output, alive, stopped, report):
+    watch = OwnershipWatch(output, alive)
+    try:
+        return serve_audio(channel, output, alive, stopped, report, watch)
+    finally:
+        watch.close()
+
+
+def serve_audio(channel, output, alive, stopped, report, watch):
     from carrier import HEADER, validate_header
     channel.sendall(b'R')
     pending = bytearray()
     profiled = ended = False
-    last_data = last_guard = time.monotonic()
+    last_data = last_alive = time.monotonic()
     begin = last_data
     while not stopped[0] and time.monotonic() - begin < 21600:
         now = time.monotonic()
-        if now - last_guard >= .5:
-            if not alive() or not output.still_owned():
+        watch.check()
+        if now - last_alive >= .5:
+            if not alive():
                 raise RuntimeError('MAT session owner changed')
-            if output.route_written and output.tv.earc() != TARGET:
-                raise RuntimeError('MAT output control changed')
-            last_guard = now
+            last_alive = now
         if now - last_data > (3 if profiled else 130):
             raise RuntimeError('MAT source idle deadline exceeded')
         if select.select([channel], [], [], .03)[0]:
@@ -307,6 +372,7 @@ def serve(channel, output, alive, stopped, report):
                 if profiled or output.count:
                     raise RuntimeError('duplicate MAT profile')
                 output.open()
+                watch.start()
                 profiled = True
                 channel.sendall(b'S')
                 report('receiving', codec=7)

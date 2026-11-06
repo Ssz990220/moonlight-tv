@@ -7,6 +7,7 @@ import socket
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -40,6 +41,65 @@ class Output:
 
 
 class ReceiverTests(unittest.TestCase):
+    def test_control_query_stall_does_not_block_audio_feeding(self):
+        entered, release = threading.Event(), threading.Event()
+        class SlowControl(Output):
+            def still_owned(self):
+                entered.set()
+                release.wait(2)
+                return True
+        client, output, failures, thread = self.start(SlowControl())
+        try:
+            client.sendall(record(b'TVMS'))
+            self.assertEqual(client.recv(1), b'S')
+            self.assertTrue(entered.wait(1))
+            time.sleep(.55)  # Cross the old synchronous control-poll interval.
+            for count in range(3):
+                client.sendall(record(b'TVMT', count, bytes(61440)))
+            until = time.monotonic() + .3
+            while output.count != 3 and time.monotonic() < until:
+                time.sleep(.005)
+            self.assertEqual(output.count, 3)
+        finally:
+            release.set()
+        client.sendall(record(b'TVME', 3))
+        self.assertEqual(client.recv(1), b'D')
+        client.shutdown(socket.SHUT_WR)
+        thread.join(2)
+        self.assertFalse(thread.is_alive())
+        self.assertFalse(failures)
+
+    def test_ownership_loss_is_still_terminal(self):
+        class LostOwner(Output):
+            def still_owned(self): return False
+        client, output, failures, thread = self.start(LostOwner())
+        client.sendall(record(b'TVMS'))
+        self.assertEqual(client.recv(1), b'S')
+        thread.join(2)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(len(failures), 1)
+        self.assertIn('owner changed', str(failures[0]))
+
+    def test_stalled_control_proof_expires(self):
+        entered, release = threading.Event(), threading.Event()
+        class StalledControl(Output):
+            def still_owned(self):
+                entered.set()
+                release.wait(4)
+                return True
+        client, _, failures, thread = self.start(StalledControl())
+        try:
+            client.sendall(record(b'TVMS'))
+            self.assertEqual(client.recv(1), b'S')
+            self.assertTrue(entered.wait(1))
+            time.sleep(2.2)
+        finally:
+            release.set()
+        thread.join(2)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(len(failures), 1)
+        self.assertIn('verification stalled', str(failures[0]))
+
     def test_progress_distinguishes_late_arrival_and_local_buffering(self):
         events = []
         output = receiver.Output(None, lambda phase, **values: events.append((phase, values)))
