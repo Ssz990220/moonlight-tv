@@ -41,6 +41,23 @@ class Output:
 
 
 class ReceiverTests(unittest.TestCase):
+    def test_stability_counters_separate_startup_and_steady_deadline_misses(self):
+        output = receiver.Output(None, lambda *_, **__: None)
+        output.note_submission(100, 105)
+        output.note_underrun()
+        self.assertEqual(output.late_start_cycles, 1)
+        self.assertEqual(output.steady_late_start_cycles, 0)
+        self.assertEqual(output.steady_underrun_events, 0)
+        output.count = 250
+        output.note_submission(110, 110)  # Exact deadline is not late.
+        output.note_submission(120, 130)
+        output.note_underrun()
+        self.assertEqual(output.late_start_cycles, 2)
+        self.assertEqual(output.steady_late_start_cycles, 1)
+        self.assertEqual(output.max_late_start_ns, 10)
+        self.assertEqual(output.underrun_events, 2)
+        self.assertEqual(output.steady_underrun_events, 1)
+
     def test_control_query_stall_does_not_block_audio_feeding(self):
         entered, release = threading.Event(), threading.Event()
         class SlowControl(Output):

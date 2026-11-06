@@ -18,7 +18,7 @@ else ()
 endif ()
 
 # Separate experimental application; never a stable Moonlight release.
-set(MOONLIGHT_VERSION "1.6.108")
+set(MOONLIGHT_VERSION "1.6.109")
 project(moonlight VERSION ${MOONLIGHT_VERSION} LANGUAGES C)
 
 # To suppress warnings for MbedTLS

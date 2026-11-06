@@ -93,6 +93,22 @@ class Output:
         self.control_check_ms = self.max_control_check_ms = 0
         self.prepare_us = self.push_us = self.max_prepare_us = self.max_push_us = 0
         self.pipeline_timing = {}
+        self.late_start_cycles = self.steady_late_start_cycles = self.max_late_start_ns = 0
+        self.underrun_events = self.steady_underrun_events = 0
+        self.underrun_handler = 0
+
+    def note_submission(self, stamp, now):
+        late = max(0, now - stamp)
+        if late:
+            self.late_start_cycles += 1
+            if self.count >= 250:
+                self.steady_late_start_cycles += 1
+            self.max_late_start_ns = max(self.max_late_start_ns, late)
+
+    def note_underrun(self):
+        self.underrun_events += 1
+        if self.count >= 250:
+            self.steady_underrun_events += 1
 
     def sample_pipeline_timing(self):
         """Software declarations/clocks only, sampled off the feeder thread."""
@@ -173,6 +189,13 @@ class Output:
             raise RuntimeError('MAT output pipeline rejected')
         self.src = g.gst_bin_get_by_name(self.pipeline, b'audio')
         self.sink = g.gst_bin_get_by_name(self.pipeline, b'ar')
+        # Audited signal signature: void (GstElement*, gpointer). Keep the
+        # callback alive until disconnected; it only increments local counters.
+        self._underrun_callback = C.CFUNCTYPE(None, P, P)(lambda *_: self.note_underrun())
+        self.underrun_handler = g.connect(self.sink, b'audio-underrun',
+                                         C.cast(self._underrun_callback, P), None, None, 0)
+        if not self.underrun_handler:
+            raise RuntimeError('MAT underrun diagnostics unavailable')
         self.bus = g.gst_element_get_bus(self.pipeline)
         self.segment = g.segment(0)
         clock = bind(g.g, 'gst_system_clock_obtain', [], P)()
@@ -202,7 +225,7 @@ class Output:
         self.input_digest.update(payload)
         if self.origin is None:
             self.first_arrival = time.monotonic()
-            self.origin = self.running() + 80000000
+            self.origin = self.running() + 20000000
         stamp = self.origin + pts * 1000000000 // 48000
         # Format discovery needs only a complete carrier. The decoded PCM is
         # deliberately not consumed; a larger game bed can fill that unused
@@ -216,6 +239,7 @@ class Output:
         prepared = time.monotonic_ns()
         g.push(self.src, encoded, stamp, 20000000, self.segment, 0x200000)
         done = time.monotonic_ns()
+        self.note_submission(stamp, self.running())
         prepare_us, push_us = (prepared - began) // 1000, (done - prepared) // 1000
         self.prepare_us += prepare_us
         self.push_us += push_us
@@ -259,7 +283,12 @@ class Output:
                                 'prepareMaxUs': self.max_prepare_us,
                                 'pushMeanUs': self.push_us // self.count,
                                 'pushMaxUs': self.max_push_us},
-                    pipelineTiming=dict(self.pipeline_timing))
+                    pipelineTiming=dict(self.pipeline_timing),
+                    lateStartCycles=self.late_start_cycles,
+                    steadyLateStartCycles=self.steady_late_start_cycles,
+                    maxLateStartMs=round(self.max_late_start_ns / 1000000, 3),
+                    underrunEvents=self.underrun_events,
+                    steadyUnderrunEvents=self.steady_underrun_events)
 
     def check_bus(self):
         message = self.g.gst_bus_timed_pop_filtered(self.bus, 0, 2)
@@ -285,14 +314,24 @@ class Output:
 
     def close(self):
         errors = []
+        final_stats = {}
         def attempt(name, call):
             try:
                 call()
             except BaseException:
                 errors.append(name)
+        if self.g and self.sink and self.underrun_handler:
+            def disconnect():
+                from runtime import P, bind
+                bind(self.g.o, 'g_signal_handler_disconnect', [P, C.c_ulong], None)(self.sink, self.underrun_handler)
+                self.underrun_handler = 0
+            attempt('underrun-disconnect', disconnect)
         if self.g and self.sink:
-            attempt('final-stats', lambda: self.report('stopping', cycles=self.count,
-                    stats=self.g.stats(self.sink), inputSha256=self.input_digest.hexdigest()))
+            def snapshot_final():
+                final_stats.update(self.g.stats(self.sink))
+                self.report('stopping', cycles=self.count, stats=final_stats,
+                            inputSha256=self.input_digest.hexdigest())
+            attempt('final-stats', snapshot_final)
         if self.pipeline:
             attempt('pipeline-stop', lambda: self.g.gst_element_set_state(self.pipeline, 1))
         if self.connected:
@@ -314,7 +353,12 @@ class Output:
                 attempt('segment-free', lambda: self.g.gst_segment_free(self.segment))
         if self.resource:
             attempt('resource-release', self.resource.close)
-        self.report('closed', cycles=self.count, cleanupErrors=errors)
+        self.report('closed', cycles=self.count, cleanupErrors=errors, stats=final_stats,
+                    lateStartCycles=self.late_start_cycles,
+                    steadyLateStartCycles=self.steady_late_start_cycles,
+                    maxLateStartMs=round(self.max_late_start_ns / 1000000, 3),
+                    underrunEvents=self.underrun_events,
+                    steadyUnderrunEvents=self.steady_underrun_events)
         return not errors
 
 
