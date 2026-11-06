@@ -91,6 +91,32 @@ class Output:
         self.origin = self.last_end = None
         self.first_arrival = None
         self.control_check_ms = self.max_control_check_ms = 0
+        self.prepare_us = self.push_us = self.max_prepare_us = self.max_push_us = 0
+        self.pipeline_timing = {}
+
+    def sample_pipeline_timing(self):
+        """Software declarations/clocks only, sampled off the feeder thread."""
+        from runtime import P, U, bind
+        g = self.g
+        if not g or not self.pipeline or not self.sink:
+            return
+        if not hasattr(self, '_sink_latency'):
+            self._sink_latency = bind(C.CDLL('libgstbase-1.0.so.0'),
+                                      'gst_base_sink_get_latency', [P], U)
+            self._pipeline_latency = bind(g.g, 'gst_pipeline_get_latency', [P], U)
+        fields = [('renderDelayNs', 'render-delay', U),
+                  ('processingDeadlineNs', 'processing-deadline', U),
+                  ('timestampOffsetNs', 'ts-offset', C.c_int64),
+                  ('sync', 'sync', C.c_int), ('lipsync', 'lipsync', C.c_int)]
+        timing = {key: g.prop(self.sink, name, ctype) for key, name, ctype in fields}
+        timing.update(sinkLatencyNs=int(self._sink_latency(self.sink)),
+                      pipelineLatencyNs=int(self._pipeline_latency(self.pipeline)),
+                      sourceIsLive=g.prop(self.src, 'is-live', C.c_int),
+                      pipelineBaseNs=int(g.gst_element_get_base_time(self.pipeline)),
+                      sinkBaseNs=int(g.gst_element_get_base_time(self.sink)),
+                      runningNs=self.running(), lastBufferEndNs=self.last_end,
+                      sampledMonotonicNs=time.monotonic_ns())
+        self.pipeline_timing = timing
 
     def settings(self):
         return self.tv.luna('luna://com.webos.settingsservice/getSystemSettings', {
@@ -166,6 +192,7 @@ class Output:
         from carrier import to_lg_carrier
         from runtime import P, U, bind
         g = self.g
+        began = time.monotonic_ns()
         encoded = to_lg_carrier(payload, crc)
         self.input_digest.update(payload)
         if self.origin is None:
@@ -181,7 +208,14 @@ class Output:
             raise RuntimeError('MAT PCM processing mode changed')
         if g.prop(self.src, 'current-level-bytes', U) > 1228800:
             raise RuntimeError('MAT native queue limit exceeded')
+        prepared = time.monotonic_ns()
         g.push(self.src, encoded, stamp, 20000000, self.segment, 0x200000)
+        done = time.monotonic_ns()
+        prepare_us, push_us = (prepared - began) // 1000, (done - prepared) // 1000
+        self.prepare_us += prepare_us
+        self.push_us += push_us
+        self.max_prepare_us = max(self.max_prepare_us, prepare_us)
+        self.max_push_us = max(self.max_push_us, push_us)
         self.last_end = stamp + 20000000
         self.count += 1
         if self.count % 250 == 0:
@@ -214,7 +248,13 @@ class Output:
                     queuedBytes=self.g.prop(self.src, 'current-level-bytes', U),
                     presentationLeadMs=round((self.last_end - now) / 1000000, 3),
                     arrivalAgeMs=round((time.monotonic() - self.first_arrival) * 1000 - self.count * 20, 3),
-                    controlCheckMs=self.control_check_ms, maxControlCheckMs=self.max_control_check_ms)
+                    controlCheckMs=self.control_check_ms, maxControlCheckMs=self.max_control_check_ms,
+                    feedTiming={'calls': self.count,
+                                'prepareMeanUs': self.prepare_us // self.count,
+                                'prepareMaxUs': self.max_prepare_us,
+                                'pushMeanUs': self.push_us // self.count,
+                                'pushMaxUs': self.max_push_us},
+                    pipelineTiming=dict(self.pipeline_timing))
 
     def check_bus(self):
         message = self.g.gst_bus_timed_pop_filtered(self.bus, 0, 2)
@@ -290,6 +330,7 @@ class OwnershipWatch:
         self.thread.start()
 
     def run(self):
+        last_sample = None
         while not self.stop.is_set():
             began = time.monotonic()
             try:
@@ -305,6 +346,13 @@ class OwnershipWatch:
             with self.lock:
                 self.failure = failure
                 self.verified = time.monotonic()
+            if not failure and hasattr(self.output, 'sample_pipeline_timing') and (last_sample is None or time.monotonic() - last_sample >= 5):
+                try:
+                    self.output.sample_pipeline_timing()
+                except Exception:
+                    # Missing diagnostics must never alter media/ownership state.
+                    self.output.pipeline_timing = {'unavailable': 1}
+                last_sample = time.monotonic()
             if failure or self.stop.wait(.5):
                 return
 

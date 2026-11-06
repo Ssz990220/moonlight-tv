@@ -119,6 +119,34 @@ class ReceiverTests(unittest.TestCase):
         self.assertEqual(values['arrivalAgeMs'], 200.0)
         self.assertEqual(values['queuedBytes'], 122880)
         self.assertEqual(values['stats']['rendered'], 244)
+        self.assertEqual(values['feedTiming']['calls'], 250)
+        self.assertEqual(values['pipelineTiming'], {})
+
+    def test_slow_timing_snapshot_does_not_block_feeding(self):
+        entered, release = threading.Event(), threading.Event()
+        class SlowTiming(Output):
+            def sample_pipeline_timing(self):
+                entered.set()
+                release.wait(2)
+        client, output, failures, thread = self.start(SlowTiming())
+        try:
+            client.sendall(record(b'TVMS'))
+            self.assertEqual(client.recv(1), b'S')
+            self.assertTrue(entered.wait(1))
+            for count in range(3):
+                client.sendall(record(b'TVMT', count, bytes(61440)))
+            until = time.monotonic() + .3
+            while output.count != 3 and time.monotonic() < until:
+                time.sleep(.005)
+            self.assertEqual(output.count, 3)
+        finally:
+            release.set()
+        client.sendall(record(b'TVME', 3))
+        self.assertEqual(client.recv(1), b'D')
+        client.shutdown(socket.SHUT_WR)
+        thread.join(2)
+        self.assertFalse(thread.is_alive())
+        self.assertFalse(failures)
 
     def pair(self):
         client, server = socket.socketpair()
