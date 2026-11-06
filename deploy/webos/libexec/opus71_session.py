@@ -21,6 +21,19 @@ APP = 'com.ssz990220.moonlight.opus71'
 TARGET = [2, 1, 8, 0, 1]
 
 
+def write_numeric(root, name, value):
+    try:
+        folder = root / 'cache'
+        folder.mkdir(exist_ok=True)
+        temporary = folder / (name + '.tmp')
+        fd = os.open(str(temporary), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, 'w') as output:
+            json.dump(value, output)
+        temporary.replace(folder / (name + '.json'))
+    except OSError:
+        pass
+
+
 def capture_startup(stream, root):
     """Retain initialization and bounded numeric failure evidence, never raw logs."""
     rows = []
@@ -62,6 +75,15 @@ def capture_startup(stream, root):
                 return
             yield line
     for line in lines():
+        video = re.search(r'Video timings rttMs=(-?\d+) hostUs=(-?\d+) reassemblyUs=(-?\d+) '
+                          r'submitUs=(-?\d+) decoderQueueUs=(-?\d+) frames=(\d+) '
+                          r'received=(\d+) networkDrops=(\d+) windowMs=(\d+)\s*$', line)
+        if video:
+            fields = ('rttMs', 'hostUs', 'reassemblyUs', 'submitUs', 'decoderQueueUs',
+                      'frames', 'received', 'networkDrops', 'windowMs')
+            value = dict(zip(fields, map(int, video.groups())))
+            value['seconds'] = round(time.monotonic() - started, 3)
+            write_numeric(root, 'stream-performance', value)
         for kind, expression in failures:
             failure = re.search(expression, line)
             if not failure:
@@ -70,17 +92,7 @@ def capture_startup(stream, root):
             events.append({'kind': kind, 'seconds': round(time.monotonic() - started, 3),
                            'values': [int(x, base) for x in failure.groups()]})
             events = events[-32:]
-            try:
-                folder = root / 'cache'
-                folder.mkdir(exist_ok=True)
-                target = folder / 'stream-diagnostics.json'
-                temporary = folder / 'stream-diagnostics.tmp'
-                fd = os.open(str(temporary), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-                with os.fdopen(fd, 'w') as output:
-                    json.dump({'events': events}, output)
-                temporary.replace(target)
-            except OSError:
-                pass
+            write_numeric(root, 'stream-diagnostics', {'events': events})
             break
         match = pattern.search(line)
         if not match or len(rows) >= 24:

@@ -27,6 +27,23 @@ def log(pid=123, acmod=21, start=10):
 
 
 class PolicyTest(unittest.TestCase):
+    def test_video_performance_is_numeric_private_and_separate_from_failures(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            text = 'System: webOS\n' * 30
+            text += 'Video timings rttMs=2 hostUs=3500 reassemblyUs=200 submitUs=100 decoderQueueUs=8300 frames=60 received=60 networkDrops=0 windowMs=1000\n'
+            text += 'Video timings rttMs=2 hostUs=3500 reassemblyUs=200 submitUs=100 decoderQueueUs=8300 frames=60 received=60 networkDrops=0 windowMs=1000 token=secret\n'
+            text += 'Connection terminated, errorCode = 0xffffffff\n'
+            p.capture_startup(io.StringIO(text), root)
+            file = root / 'cache/stream-performance.json'
+            value = json.loads(file.read_text())
+            self.assertEqual(value['hostUs'], 3500)
+            self.assertEqual(value['decoderQueueUs'], 8300)
+            self.assertEqual(value['frames'], 60)
+            self.assertNotIn('secret', file.read_text())
+            self.assertEqual(file.stat().st_mode & 0o777, 0o600)
+            self.assertEqual([x['kind'] for x in json.loads((root / 'cache/stream-diagnostics.json').read_text())['events']], ['terminated'])
+
     def test_failure_journal_is_numeric_bounded_and_survives_startup_limit(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

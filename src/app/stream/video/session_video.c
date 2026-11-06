@@ -29,6 +29,7 @@ static SS4S_Player *player = NULL;
 static unsigned char *buffer = NULL;
 static size_t buffer_size = 0;
 static int lastFrameNumber;
+static unsigned long last_diagnostic_time;
 // Set when SS4S_PlayerVideoFeed returns NOT_READY (decoder is in an
 // exclusive op like HDR toggle or resolution change). Consumed on the
 // next successful Feed: we ask Limelight for one IDR so the decoder
@@ -36,6 +37,7 @@ static int lastFrameNumber;
 // P-frame against a discontinuity.
 static bool need_idr_on_resume = false;
 static struct VIDEO_STATS vdec_temp_stats;
+static struct VIDEO_STATS vdec_diagnostic_stats;
 static int vdec_stream_format = 0;
 VIDEO_STATS vdec_summary_stats;
 VIDEO_INFO vdec_stream_info;
@@ -82,10 +84,12 @@ int vdec_delegate_setup(int videoFormat, int width, int height, int redrawRate, 
     session = context;
     player = session->player;
     memset(&vdec_temp_stats, 0, sizeof(vdec_temp_stats));
+    memset(&vdec_diagnostic_stats, 0, sizeof(vdec_diagnostic_stats));
     memset(&vdec_stream_info, 0, sizeof(vdec_stream_info));
     vdec_stream_format = videoFormat;
     vdec_stream_info.format = video_format_name(videoFormat);
     lastFrameNumber = 0;
+    last_diagnostic_time = 0;
     need_idr_on_resume = false;
     SS4S_VideoInfo info = {
             .width = width,
@@ -256,7 +260,33 @@ void vdec_stat_submit(const struct VIDEO_STATS *src, unsigned long now) {
     dst->totalFps = (float) dst->totalFrames / ((float) delta / 1000);
     dst->receivedFps = (float) dst->receivedFrames / ((float) delta / 1000);
     dst->decodedFps = (float) dst->submittedFrames / ((float) delta / 1000);
-    LiGetEstimatedRttInfo(&dst->rtt, &dst->rttVariance);
+    bool rtt_valid = LiGetEstimatedRttInfo(&dst->rtt, &dst->rttVariance);
+    struct VIDEO_STATS *diag = &vdec_diagnostic_stats;
+    if (!diag->measurementStartTimestamp) diag->measurementStartTimestamp = src->measurementStartTimestamp;
+    diag->receivedFrames += src->receivedFrames;
+    diag->submittedFrames += src->submittedFrames;
+    diag->networkDroppedFrames += src->networkDroppedFrames;
+    diag->totalCaptureLatency += src->totalCaptureLatency;
+    diag->totalReassemblyTimeUs += src->totalReassemblyTimeUs;
+    diag->totalSubmitTimeUs += src->totalSubmitTimeUs;
+    if (now - last_diagnostic_time >= 5000) {
+        last_diagnostic_time = now;
+        long long host_us = diag->totalCaptureLatency && diag->receivedFrames ?
+            (long long) diag->totalCaptureLatency * 100 / diag->receivedFrames : -1;
+        long long reassembly_us = diag->receivedFrames ?
+            (long long) diag->totalReassemblyTimeUs / diag->receivedFrames : -1;
+        long long submit_us = diag->submittedFrames ?
+            (long long) diag->totalSubmitTimeUs / diag->submittedFrames : -1;
+        int decoder_us = -1;
+        if (!SS4S_PlayerGetVideoLatency(player, 0, &decoder_us)) decoder_us = -1;
+        // The NDL backend estimates decoder queueing. These counters exclude
+        // game input/render delay, display processing and physical scan-out.
+        commons_log_info("Session", "Video timings rttMs=%d hostUs=%lld reassemblyUs=%lld submitUs=%lld decoderQueueUs=%d frames=%u received=%u networkDrops=%u windowMs=%lu",
+                         rtt_valid ? (int) dst->rtt : -1, host_us, reassembly_us,
+                         submit_us, decoder_us, diag->submittedFrames, diag->receivedFrames,
+                         diag->networkDroppedFrames, now - diag->measurementStartTimestamp);
+        memset(diag, 0, sizeof(*diag));
+    }
     if (!streaming_stats_shown()) {
         return;
     }
