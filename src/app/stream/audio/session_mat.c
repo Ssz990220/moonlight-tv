@@ -139,6 +139,13 @@ fail:
 
 bool session_mat_open(void) {
     if (channel < 0 || !record("TVMS", 7, 48000, NULL, 0) || !reply('S', 6000)) return false;
+    // Complete MAT cycles use the normal audio broadcast/FEC queue. Reserve
+    // room for their packet bursts on this socket only; no global sysctl.
+    LI_STREAM_SOCKETS sockets;
+    LiGetStreamSockets(&sockets);
+    const int receive_buffer = 512 * 1024;
+    if (sockets.audioRtp.fd < 0 || setsockopt(sockets.audioRtp.fd, SOL_SOCKET, SO_RCVBUF,
+                                           &receive_buffer, sizeof(receive_buffer))) return false;
     LI_MAT_PLAYBACK_CALLBACKS callbacks = {cycle, end, NULL};
     LiSetMatPlaybackCallbacks(&callbacks);
     return true;
