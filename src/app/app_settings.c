@@ -36,6 +36,7 @@ static void set_int(int *field, const char *value);
 #define SETTINGS_COUNT(values) (sizeof(values) / sizeof((values)[0]))
 
 static const char *const touchpad_mode_values[] = {"mouse", "native"};
+static const char *const video_color_range_values[] = {"auto", "limited", "full"};
 
 const audio_config_entry_t audio_configs[] = {
         {AUDIO_CONFIGURATION_STEREO,      "stereo", translatable("Stereo")},
@@ -83,6 +84,7 @@ void settings_initialize(app_settings_t *config, char *conf_dir) {
     config->hdr = false;
     config->hevc = true;
     config->av1 = false;
+    config->video_color_range = VIDEO_COLOR_RANGE_AUTO;
     config->stick_deadzone = 7;
 
     config->conf_dir = conf_dir;
@@ -143,6 +145,10 @@ bool settings_save(app_settings_t *config) {
     ini_write_bool(fp, "hdr", config->hdr);
     ini_write_bool(fp, "hevc", config->hevc);
     ini_write_bool(fp, "av1", config->av1);
+    ini_write_string(fp, "color_range",
+                     indexed_setting_serialize(video_color_range_values,
+                                               SETTINGS_COUNT(video_color_range_values),
+                                               config->video_color_range, VIDEO_COLOR_RANGE_AUTO));
 
     ini_write_section(fp, "audio");
     ini_write_string(fp, "format", config->stream.audioCodec == AUDIO_CODEC_MAT_LIVE ? "mat" :
@@ -282,6 +288,9 @@ static int settings_parse(app_settings_t *config, const char *section, const cha
         config->av1 = INI_IS_TRUE(value);
     } else if (INI_NAME_MATCH("hdr")) {
         config->hdr = INI_IS_TRUE(value);
+    } else if (INI_FULL_MATCH("video", "color_range")) {
+        config->video_color_range = indexed_setting_parse(
+                value, video_color_range_values, SETTINGS_COUNT(video_color_range_values), VIDEO_COLOR_RANGE_AUTO);
     } else if (INI_NAME_MATCH("surround")) {
         config->stream.audioConfiguration = parse_audio_config(value);
     } else if (INI_NAME_MATCH("sops")) {

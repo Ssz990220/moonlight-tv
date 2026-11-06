@@ -564,3 +564,18 @@ msgstr ""
 msgid "Performance"
 msgstr ""
 
+
+msgid "Color range"
+msgstr "色彩範圍"
+
+msgid "Auto (decoder default)"
+msgstr "自動（解碼器預設）"
+
+msgid "Limited"
+msgstr "有限範圍（Limited）"
+
+msgid "Full"
+msgstr "完整範圍（Full）"
+
+msgid "Applied when a new stream starts."
+msgstr "重新連線串流後生效。"

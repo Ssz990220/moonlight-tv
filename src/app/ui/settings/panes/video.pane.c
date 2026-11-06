@@ -19,6 +19,7 @@ typedef struct video_pane_t {
 
     pref_dropdown_string_entry_t *vdec_entries;
     int vdec_entries_len;
+    pref_dropdown_int_entry_t color_range_entries[3];
 } video_pane_t;
 
 static lv_obj_t *create_obj(lv_fragment_t *self, lv_obj_t *container);
@@ -48,6 +49,12 @@ const lv_fragment_class_t settings_pane_video_cls = {
 static void pane_ctor(lv_fragment_t *self, void *args) {
     video_pane_t *pane = (video_pane_t *) self;
     pane->parent = args;
+    pane->color_range_entries[0] = (pref_dropdown_int_entry_t) {
+            .name = locstr("Auto (decoder default)"), .value = VIDEO_COLOR_RANGE_AUTO, .fallback = true};
+    pane->color_range_entries[1] = (pref_dropdown_int_entry_t) {
+            .name = locstr("Limited"), .value = VIDEO_COLOR_RANGE_LIMITED};
+    pane->color_range_entries[2] = (pref_dropdown_int_entry_t) {
+            .name = locstr("Full"), .value = VIDEO_COLOR_RANGE_FULL};
     array_list_t modules = pane->parent->app->ss4s.modules;
     pane->vdec_entries = calloc(modules.size + 1, sizeof(pref_dropdown_string_entry_t));
 
@@ -91,6 +98,12 @@ static lv_obj_t *create_obj(lv_fragment_t *self, lv_obj_t *container) {
     controller->conflict_hint = conflict_hint;
 
     pref_header(view, locstr("Video Settings"));
+
+    pref_title_label(view, locstr("Color range"));
+    lv_obj_t *range_dropdown = pref_dropdown_int(view, controller->color_range_entries, 3,
+                                                 &app_configuration->video_color_range, NULL);
+    lv_obj_set_width(range_dropdown, LV_PCT(100));
+    pref_desc_label(view, locstr("Applied when a new stream starts."), false);
 
     lv_obj_t *hevc_checkbox = pref_checkbox(view, locstr("Use H265 when possible"), &app_configuration->hevc, false);
     lv_obj_t *hevc_hint = pref_desc_label(view, NULL, false);

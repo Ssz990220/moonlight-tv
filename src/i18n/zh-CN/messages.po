@@ -573,3 +573,18 @@ msgstr "退出游戏"
 msgid "Performance"
 msgstr "性能"
 
+
+msgid "Color range"
+msgstr "色彩范围"
+
+msgid "Auto (decoder default)"
+msgstr "自动（解码器默认）"
+
+msgid "Limited"
+msgstr "有限范围（Limited）"
+
+msgid "Full"
+msgstr "完整范围（Full）"
+
+msgid "Applied when a new stream starts."
+msgstr "重新连接串流后生效。"

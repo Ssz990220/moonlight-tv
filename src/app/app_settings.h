@@ -32,6 +32,12 @@ enum {
     TOUCHPAD_MODE_NATIVE = 1,
 };
 
+enum {
+    VIDEO_COLOR_RANGE_AUTO = 0,
+    VIDEO_COLOR_RANGE_LIMITED = 1,
+    VIDEO_COLOR_RANGE_FULL = 2,
+};
+
 #define TOUCHPAD_SPEED_MIN 25
 #define TOUCHPAD_SPEED_MAX 200
 #define TOUCHPAD_SPEED_DEFAULT 100
@@ -63,6 +69,7 @@ typedef struct app_settings_t {
     bool hdr;
     bool hevc;
     bool av1;
+    int video_color_range;
     int stick_deadzone;
 
     char *conf_dir;

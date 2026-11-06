@@ -309,7 +309,14 @@ void session_config_init(app_t *app, session_config_t *config, const SERVER_DATA
     } else {
         config->stream.colorSpace = COLORSPACE_REC_601;
     }
-    config->stream.colorRange = video_cap.fullColorRange ? COLOR_RANGE_FULL : COLOR_RANGE_LIMITED;
+    bool full_range = video_cap.fullColorRange;
+    if (app_config->video_color_range == VIDEO_COLOR_RANGE_FULL) {
+        full_range = true;
+    } else if (app_config->video_color_range == VIDEO_COLOR_RANGE_LIMITED) {
+        full_range = false;
+    }
+    // The same selection drives host encoding and the HDR VUI metadata below.
+    config->stream.colorRange = full_range ? COLOR_RANGE_FULL : COLOR_RANGE_LIMITED;
 #if FEATURE_SURROUND_SOUND
     if (audio_cap.maxChannels < CHANNEL_COUNT_FROM_AUDIO_CONFIGURATION(config->stream.audioConfiguration)) {
         switch (audio_cap.maxChannels) {
