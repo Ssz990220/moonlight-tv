@@ -3,7 +3,7 @@ description: "Install dependencies and build binaries for webOS"
 inputs:
   build-type:
     description: 'CMake build type'
-    default: 'Debug'
+    default: 'Release'
     required: false
 
 runs:

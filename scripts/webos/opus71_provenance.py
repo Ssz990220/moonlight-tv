@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 import subprocess
@@ -18,6 +19,7 @@ value = {
     'moonlightCommit': revision(root),
     'ss4sCommit': revision(root / 'third_party/ss4s'),
     'commonCommit': revision(root / 'core/moonlight-common-c'),
+    'buildType': os.environ.get('BUILD_TYPE', 'unknown'),
     'tvInstalled': False,
     'tvRuntimeValidated': False,
     'outputGoal': 'Configurable Auto/Opus/Require MAT; live authenticated MAT to native ES/HBR eARC; integrated AV validation pending',
